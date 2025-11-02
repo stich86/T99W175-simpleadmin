@@ -748,11 +748,11 @@
                   // --- Network Mode ---
                   // find this example value from lines "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"TDD\",515,66,7000C4001,475,702000,620640,78,12,-83,-3,16,1,-\r"
 
-                    const network_mode = lines
-                      .find((line) => line.includes('RAT:'))
-                      .split(":")[1]
-		      .trim()
-                     this.networkMode = network_mode;
+                  const ratLine = lines.find((line) => line.includes('RAT:'));
+                  const network_mode = ratLine
+                    ? ratLine.split(":")[1].trim()
+                    : "Unknown";
+                  this.networkMode = network_mode;
 
                   // --- Bands ---
                   // Get all the values with LTE BAND n (for example, LTE BAND 3, LTE BAND 1) and then store them in an array
@@ -810,108 +810,64 @@
                   }
 
                   // --- E/ARFCN ---
-                  if (
-                    this.networkMode === "NR5G_SA"
-                  ) {
-                      // Look for all the lines with this value "+QCAINFO: \"SCC\" and store them in an array
-                      const nr_arfcn = lines.filter((line) =>
-                        line.includes("nr_channel:")
-                      );
-                      // if empty, then proceed to error block
-                      if (nr_arfcn.length == 0) {
-                        throw "No  ARFCN";
-                      }
+                  const lteArfcnLines = lines.filter((line) =>
+                    line.startsWith("channel:")
+                  );
+                  const nrArfcnLines = lines.filter((line) =>
+                    line.includes("nr_channel:")
+                  );
 
-                      // process all the values in the array and extract the ARFCN part only
-                      for (let i = 0; i < nr_arfcn.length; i++) {
-                        nr_arfcn[i] = nr_arfcn[i].split(":")[1];
+                  const lteArfcns = lteArfcnLines
+                    .map((line) => {
+                      const segment = line.split(":")[1];
+                      if (!segment) {
+                        return null;
                       }
-                      // combine the PCC and SCC ARFCN values
-                      this.earfcns = nr_arfcn.join(", ");
-                  } else if (
-                    this.networkMode == "LTE"
-                  ) {
-                    try {
-                      // Look for all the lines with this value "+QCAINFO: \"SCC\" and store them in an array
-                      const lte_arfcn = lines.filter((line) =>
-                        line.includes('channel:')
-                      );
+                      return segment.split(" ")[0].trim();
+                    })
+                    .filter((value) => value && value.length > 0);
 
-                      // if empty, then proceed to error block
-                      if (lte_arfcn.length == 0) {
-                        throw "No SCC ARFCN";
-                      }
+                  const nrArfcns = nrArfcnLines
+                    .map((line) => {
+                      const segment = line.split(":")[1];
+                      return segment ? segment.trim() : null;
+                    })
+                    .filter((value) => value && value.length > 0);
 
-                      // process all the values in the array and extract the ARFCN part only
-                      for (let i = 0; i < lte_arfcn.length; i++) {
-                        lte_arfcn[i] = lte_arfcn[i].split(":")[1].split(" ")[0];
-                      }
-
-                      // combine the PCC and SCC ARFCN values
-                      this.earfcns = lte_arfcn.join(", ");
-                    } catch (error) {
-                      this.earfcns = "Unknown E/ARFCN";
-                    }
-                  } 
-                  else {
+                  const allArfcns = [...lteArfcns, ...nrArfcns];
+                  if (allArfcns.length > 0) {
+                    this.earfcns = allArfcns.join(", ");
+                  } else {
                     this.earfcns = "Unknown E/ARFCN";
                   }
 
                   // --- PCI ---
-                  if (
-                    this.networkMode == "NR5G_SA"
-                  ) {
-                    try {
-                      // Look for all the lines with this value "+QCAINFO: \"SCC\" and store them in an array
-                      const nr_pci = lines.filter((line) =>
-                        line.includes('nr_pci:')
-                      );
+                  const ltePciLines = lines.filter(
+                    (line) => line.startsWith("channel:") && line.includes('pci:')
+                  );
+                  const nrPciLines = lines.filter((line) =>
+                    line.includes('nr_pci:')
+                  );
 
-                      // if empty, then proceed to error block
-                      if (nr_pci.length == 0) {
-                        throw "No SCC PCI";
-                      }
+                  const ltePcis = ltePciLines
+                    .map((line) => {
+                      const segment = line.split('pci:')[1];
+                      return segment ? segment.trim().split(' ')[0] : null;
+                    })
+                    .filter((value) => value && value.length > 0);
 
-                      // process all the values in the array and extract the PCI part only
-                      for (let i = 0; i < nr_pci.length; i++) {
-                        nr_pci[i] = nr_pci[i].split(":")[1];
-                      }
+                  const nrPcis = nrPciLines
+                    .map((line) => {
+                      const segment = line.split(":")[1];
+                      return segment ? segment.trim() : null;
+                    })
+                    .filter((value) => value && value.length > 0);
 
-                      // combine the PCC and SCC PCI values
-                      this.pccPCI = nr_pci;
-                    } catch (error) {
-                      // remove comma if only one value
-                      this.pccPCI = nr_pci.replace(/,/g, "");
-                      this.sccPCI = "-";
-                    }
-                  } else if (
-                    this.networkMode == "LTE"
-                  ) {
-                    // find this value from lines "+QCAINFO: \"PCC\"
-                    try {
-                      // Look for all the lines with this value "+QCAINFO: \"SCC\" and store them in an array
-                      const lte_pci = lines.filter((line) =>
-                        line.includes('pci:')
-                      );
-
-                      // if empty, then proceed to error block
-                      if (lte_pci.length == 0) {
-                        throw "No SCC PCI";
-                      }
-
-                      // process all the values in the array and extract the PCI part only
-                      for (let i = 0; i < lte_pci.length; i++) {
-                        lte_pci[i] = lte_pci[i].split(":")[2];
-                      }
-
-                      // combine the PCC and SCC PCI values
-                      this.pccPCI = lte_pci;
-                    } catch (error) {
-                      this.pccPCI = lte_pci;
-                      this.sccPCI = "-";
-                    }
-                  }
-                  else {
+                  const allPcis = [...ltePcis, ...nrPcis];
+                  if (allPcis.length > 0) {
+                    this.pccPCI = allPcis.join(", ");
+                    this.sccPCI = "-";
+                  } else {
                     this.pccPCI = "0";
                     this.sccPCI = "-";
                   }
@@ -970,180 +926,272 @@
                   // Signal Informations
 
                   const currentNetworkMode = this.networkMode;
+                  const hasNRStats = lines.some((line) =>
+                    line.includes('nr_rsrp:')
+                  );
+                  const hasLTEStats = lines.some((line) =>
+                    line.includes('lte_rsrp:')
+                  );
 
-                  if (
-                    currentNetworkMode == "NR5G_SA" || currentNetworkMode == "LTE"
-                  ) {
-                    if (
-                      currentNetworkMode == "NR5G_SA"
-                    ) {
+                  const normalizeCellId = (value) => {
+                    if (!value) {
+                      return null;
+                    }
+                    const trimmed = value.trim().replace(/"/g, "");
+                    if (trimmed === "") {
+                      return null;
+                    }
+                    if (/^0x/i.test(trimmed)) {
+                      return trimmed.replace(/^0x/i, "").toUpperCase();
+                    }
+                    if (/^[0-9A-Fa-f]+$/.test(trimmed) && /[A-Fa-f]/.test(trimmed)) {
+                      return trimmed.toUpperCase();
+                    }
+                    const decimalValue = parseInt(trimmed, 10);
+                    if (Number.isNaN(decimalValue)) {
+                      return null;
+                    }
+                    return decimalValue.toString(16).toUpperCase();
+                  };
 
-                    // find the value from line "+QENG: \"servingcell\""
-                    // CellID
-                    const longCID = lines
-                      .find((line) => line.includes('nr_cell_id:'))
-                      .split(":")[1]
-                      .replace(/"/g, "");
-
-                    // Get the eNBID. Its just Cell ID minus the last 2 characters
-                    this.eNBID = parseInt(longCID.substring(0, longCID.length - 2), 16);
-
-                    // Get the short Cell ID (Last 2 characters of the Cell ID)
-                    const shortCID = longCID.substring(longCID.length - 2);
-
-                      // TAC
-                      const localTac = lines
-                        .find((line) => line.includes('nr_tac:'))
-                        .split(":")[1]
-                        .replace(/"/g, "");
-                      this.tac = parseInt(localTac, 16) + " (" + localTac + ")";
-                      // CSQ
-                      this.csq = "NR-SA Mode";
-
-                      // RSRP
-                      this.rsrpNR = lines
-                        .find((line) => line.includes('nr_rsrp:'))
-                        .split(":")[1]
-			.split(" ")[0]
-                        .replace(/"/g, "");
-
-                      // RSRQ
-                      this.rsrqNR = lines
-                        .find((line) => line.includes('nr_rsrq:'))
-                        .split(":")[1]
-                        .replace(/"/g, "");
-
-                      // SINR
-                      this.sinrNR = lines
-                        .find((line) => line.includes('nr_snr:'))
-                        .split(":")[1]
-                        .replace(/"/g, "");
-
-                      // Calculate the RSRP Percentage
-                      this.rsrpNRPercentage = this.calculateRSRPPercentage(
-                        parseInt(this.rsrpNR)
-                      );
-
-                      // Calculate the RSRQ Percentage
-                      this.rsrqNRPercentage = this.calculateRSRQPercentage(
-                        parseInt(this.rsrqNR)
-                      );
-
-                      // Calculate the SINR Percentage
-                      this.sinrNRPercentage = this.calculateSINRPercentage(
-                        parseInt(this.sinrNR)
-                      );
-
-                      // Calculate the Signal Percentage
-                      this.signalPercentage = this.calculateSignalPercentage(
-                        this.rsrpNRPercentage,
-                        this.sinrNRPercentage
-                      );
-
-                      // Calculate the Signal Assessment
-                      this.signalAssessment = this.signalQuality(
-                        this.signalPercentage
-                      );
-                    this.cellID =
+                  const formatCellInfo = (hexValue) => {
+                    if (!hexValue) {
+                      return null;
+                    }
+                    const longDec = parseInt(hexValue, 16);
+                    const shortHex = hexValue.slice(-2);
+                    const shortDec = parseInt(shortHex, 16);
+                    const eNbHex = hexValue.slice(0, -2);
+                    const eNbDec = eNbHex ? parseInt(eNbHex, 16) : NaN;
+                    const cellDisplay =
                       "Short " +
-                      shortCID +
+                      shortHex +
                       "(" +
-                      parseInt(shortCID, 16) +
+                      (Number.isNaN(shortDec) ? "-" : shortDec) +
                       ")" +
                       ", " +
                       "Long " +
-                      longCID +
+                      hexValue +
                       "(" +
-                      parseInt(longCID, 16) +
+                      (Number.isNaN(longDec) ? "-" : longDec) +
                       ")";
-                    } else {
-                    const longCID = lines
-                      .find((line) => line.includes('lte_cell_id:'))
-                      .split(":")[1]
-                      .replace(/"/g, "");
+                    return {
+                      display: cellDisplay,
+                      eNbId: Number.isNaN(eNbDec) ? "-" : eNbDec,
+                    };
+                  };
 
-                    // Get the eNBID. Its just Cell ID minus the last 2 characters
-                    this.eNBID = parseInt(longCID.substring(0, longCID.length - 2), 16);
+                  const formatTac = (value) => {
+                    if (!value) {
+                      return null;
+                    }
+                    const trimmed = value.trim().replace(/"/g, "");
+                    if (trimmed === "") {
+                      return null;
+                    }
+                    const isHexCandidate = /[A-Fa-f]/.test(trimmed) || /^0x/i.test(trimmed);
+                    const numericValue = isHexCandidate
+                      ? parseInt(trimmed, 16)
+                      : parseInt(trimmed, 10);
+                    if (Number.isNaN(numericValue)) {
+                      const fallback = parseInt(trimmed, 16);
+                      if (Number.isNaN(fallback)) {
+                        return null;
+                      }
+                      return fallback + " (" + trimmed + ")";
+                    }
+                    return numericValue + " (" + trimmed + ")";
+                  };
 
-                    // Get the short Cell ID (Last 2 characters of the Cell ID)
-                    const shortCID = longCID.substring(longCID.length - 2);
-                      // LTE Only
-                      // TAC
-                      const localTac = lines
-                        .find((line) => line.includes('lte_tac:'))
-                        .split(":")[1]
-                        .replace(/"/g, "");
-                      this.tac = parseInt(localTac, 16) + " (" + localTac + ")";
-                      // CSQ
-                      this.csq = lines
-                        .find((line) => line.includes("+CSQ:"))
-                        .split(" ")[1]
-                        .replace("+CSQ: ", "")
-                        .replace(/"/g, "");
+                  let cellInfoSet = false;
+                  let signalSamples = [];
 
-                      // RSRP
-                      this.rsrpLTE = lines
-                        .find((line) => line.includes('lte_rsrp:'))
-                        .split(",")[0]
-                        .split(":")[1]
-                        .replace(/"/g, "");
+                  if (hasNRStats || hasLTEStats) {
+                    if (!hasNRStats) {
+                      this.rsrpNR = "-";
+                      this.rsrqNR = "-";
+                      this.sinrNR = "-";
+                      this.rsrpNRPercentage = 0;
+                      this.rsrqNRPercentage = 0;
+                      this.sinrNRPercentage = 0;
+                    }
 
-                      // RSRQ
-                      this.rsrqLTE = lines
-                        .find((line) => line.includes('lte_rsrp:'))
-                        .split(",")[1]
-                        .split(":")[1]
-                        .replace(/"/g, "");
+                    if (!hasLTEStats) {
+                      this.rsrpLTE = "-";
+                      this.rsrqLTE = "-";
+                      this.sinrLTE = "-";
+                      this.rsrpLTEPercentage = 0;
+                      this.rsrqLTEPercentage = 0;
+                      this.sinrLTEPercentage = 0;
+                    }
 
-                      // // RSSI
-                      // this.rssi = lines
-                      //   .find((line) => line.includes('+QENG: "servingcell"'))
-                      //   .split(",")[15]
-                      //   .replace(/"/g, "");
+                    if (hasLTEStats) {
+                      const lteCellIdLine = lines.find((line) =>
+                        line.includes('lte_cell_id:')
+                      );
+                      if (lteCellIdLine) {
+                        const lteCellIdValue = lteCellIdLine.split(":")[1];
+                        const cellInfo = formatCellInfo(
+                          normalizeCellId(lteCellIdValue)
+                        );
+                        if (cellInfo) {
+                          this.cellID = cellInfo.display;
+                          this.eNBID = cellInfo.eNbId;
+                          cellInfoSet = true;
+                        }
+                      }
 
-                      // SINR
-                      this.sinrLTE = lines
-                        .find((line) => line.includes('lte_snr:'))
-                        .split(":")[2]
-                        .replace(/"/g, "");
+                      const lteTacLine = lines.find((line) =>
+                        line.includes('lte_tac:')
+                      );
+                      if (lteTacLine) {
+                        const tacDisplay = formatTac(lteTacLine.split(":")[1]);
+                        if (tacDisplay) {
+                          this.tac = tacDisplay;
+                        }
+                      }
 
-                      // Calculate the RSRP Percentage
+                      const csqLine = lines.find((line) =>
+                        line.includes("+CSQ:")
+                      );
+                      if (csqLine) {
+                        this.csq = csqLine
+                          .split(" ")[1]
+                          .replace("+CSQ: ", "")
+                          .replace(/"/g, "");
+                      } else {
+                        this.csq = hasNRStats ? "LTE+NR Mode" : "LTE Mode";
+                      }
+
+                      const lteRsrpLine = lines.find((line) =>
+                        line.includes('lte_rsrp:')
+                      );
+                      if (lteRsrpLine) {
+                        const rsrpParts = lteRsrpLine.split(',');
+                        const rsrpValue = rsrpParts[0]
+                          ? rsrpParts[0].split(":")[1].trim()
+                          : null;
+                        const rsrqValue = rsrpParts[1]
+                          ? rsrpParts[1].split(":")[1].trim()
+                          : null;
+                        this.rsrpLTE = rsrpValue || "-";
+                        this.rsrqLTE = rsrqValue || "-";
+                      }
+
+                      const lteSnrLine = lines.find((line) =>
+                        line.includes('lte_snr:')
+                      );
+                      if (lteSnrLine) {
+                        const snrSegment = lteSnrLine.split('lte_snr:')[1];
+                        this.sinrLTE = snrSegment
+                          ? snrSegment.trim().split(',')[0]
+                          : "-";
+                      }
+
                       this.rsrpLTEPercentage = this.calculateRSRPPercentage(
-                        parseInt(this.rsrpLTE)
+                        parseFloat(this.rsrpLTE)
                       );
-
-                      // Calculate the RSRQ Percentage
                       this.rsrqLTEPercentage = this.calculateRSRQPercentage(
-                        parseInt(this.rsrqLTE)
+                        parseFloat(this.rsrqLTE)
                       );
-
-                      // Calculate the SINR Percentage
                       this.sinrLTEPercentage = this.calculateSINRPercentage(
-                        parseInt(this.sinrLTE)
+                        parseFloat(this.sinrLTE)
                       );
 
-                      // Calculate the Signal Percentage
-                      this.signalPercentage = this.calculateSignalPercentage(
+                      const lteSignal = this.calculateSignalPercentage(
                         this.rsrpLTEPercentage,
                         this.sinrLTEPercentage
                       );
+                      signalSamples.push(lteSignal);
+                    }
 
-                      // Calculate the Signal Assessment
+                    if (hasNRStats) {
+                      const nrCellIdLine = lines.find((line) =>
+                        line.includes('nr_cell_id:')
+                      );
+                      if (nrCellIdLine && !cellInfoSet) {
+                        const nrCellIdValue = nrCellIdLine.split(":")[1];
+                        const cellInfo = formatCellInfo(
+                          normalizeCellId(nrCellIdValue)
+                        );
+                        if (cellInfo) {
+                          this.cellID = cellInfo.display;
+                          this.eNBID = cellInfo.eNbId;
+                          cellInfoSet = true;
+                        }
+                      }
+
+                      const nrTacLine = lines.find((line) =>
+                        line.includes('nr_tac:')
+                      );
+                      if (nrTacLine && !cellInfoSet) {
+                        const tacDisplay = formatTac(nrTacLine.split(":")[1]);
+                        if (tacDisplay) {
+                          this.tac = tacDisplay;
+                        }
+                      }
+
+                      if (!hasLTEStats && !lines.some((line) => line.includes("+CSQ:"))) {
+                        this.csq = "NR Mode";
+                      }
+
+                      const nrRsrpLine = lines.find((line) =>
+                        line.includes('nr_rsrp:')
+                      );
+                      if (nrRsrpLine) {
+                        const rsrpSegment = nrRsrpLine.split(":")[1];
+                        this.rsrpNR = rsrpSegment
+                          ? rsrpSegment.split(" ")[0].trim()
+                          : "-";
+                      }
+
+                      const nrRsrqLine = lines.find((line) =>
+                        line.includes('nr_rsrq:')
+                      );
+                      if (nrRsrqLine) {
+                        const rsrqSegment = nrRsrqLine.split(":")[1];
+                        this.rsrqNR = rsrqSegment ? rsrqSegment.trim() : "-";
+                      }
+
+                      const nrSnrLine = lines.find((line) =>
+                        line.includes('nr_snr:')
+                      );
+                      if (nrSnrLine) {
+                        const snrSegment = nrSnrLine.split(":")[1];
+                        this.sinrNR = snrSegment ? snrSegment.trim() : "-";
+                      }
+
+                      this.rsrpNRPercentage = this.calculateRSRPPercentage(
+                        parseFloat(this.rsrpNR)
+                      );
+                      this.rsrqNRPercentage = this.calculateRSRQPercentage(
+                        parseFloat(this.rsrqNR)
+                      );
+                      this.sinrNRPercentage = this.calculateSINRPercentage(
+                        parseFloat(this.sinrNR)
+                      );
+
+                      const nrSignal = this.calculateSignalPercentage(
+                        this.rsrpNRPercentage,
+                        this.sinrNRPercentage
+                      );
+                      signalSamples.push(nrSignal);
+                    }
+
+                    if (signalSamples.length > 0) {
+                      const totalSignal = signalSamples.reduce(
+                        (accumulator, current) => accumulator + current,
+                        0
+                      );
+                      this.signalPercentage = Math.round(
+                        totalSignal / signalSamples.length
+                      );
                       this.signalAssessment = this.signalQuality(
                         this.signalPercentage
                       );
-                    this.cellID =
-                      "Short " +
-                      shortCID +
-                      "(" +
-                      parseInt(shortCID, 16) +
-                      ")" +
-                      ", " +
-                      "Long " +
-                      longCID +
-                      "(" +
-                      parseInt(longCID, 16) +
-                      ")";
+                    } else {
+                      this.signalPercentage = 0;
+                      this.signalAssessment = "No Signal";
                     }
                   } else if (currentNetworkMode == "5G NSA") {
                     // find the value from line "+QENG: \"LTE\" for LTE
