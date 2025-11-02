@@ -234,6 +234,7 @@
         </div>
       </div>
     </main>
+    <script src="js/atcommand-utils.js"></script>
     <script src="js/dark-mode.js"></script>
     <script>
       function cellScanner() {
@@ -1858,12 +1859,27 @@
           isCellScanning: false,
           resultDoneCell: false,
           resultDoneNeighbourCell: false,
+          showError: false,
+          errorMessage: "",
 
           init() {
             this.generateNeighbourCellsTableRow();
             this.clearTableRowsBodyCellScan();
           },
-          startCellScan() {
+          handleScanError(message, context = "cell") {
+            this.errorMessage = message;
+            this.showError = true;
+            this.isLoading = false;
+            if (context === "cell") {
+              this.isCellScanning = false;
+              this.resultDoneCell = false;
+            }
+            if (context === "neighbour") {
+              this.resultDoneNeighbourCell = false;
+            }
+            console.error("Scanner error:", message);
+          },
+          async startCellScan() {
             // Make all arrays empty before starting a new scan
             this.nr5g_cells = [];
             this.lte_cells = [];
@@ -1872,36 +1888,36 @@
             this.tableRows = [];
             this.atcmd = "AT+QSCAN=3,1";
 
-            // Send the AT command to the device
             this.isLoading = true;
             this.isCellScanning = true;
+            this.resultDoneCell = false;
 
-            fetch(
-              "/cgi-bin/get_atcommand?" +
-                new URLSearchParams({
-                  atcmd: this.atcmd,
-                })
-            )
-              .then((res) => {
-                return res.text();
-              })
-              .then((data) => {
-                const rawdata = data;
+            try {
+              const result = await ATCommandService.execute(this.atcmd, {
+                retries: 3,
+                timeout: 60000,
+              });
+
+              if (!result.ok || !result.data) {
+                const message = result.error
+                  ? result.error.message
+                  : "La scansione delle celle non ha restituito dati.";
+                this.handleScanError(message, "cell");
+                return;
+              }
+
+              try {
+                const rawdata = result.data;
                 console.log("Rawdata: ", rawdata);
                 const lines = rawdata.split("\n");
                 console.log("Lines: ", lines);
 
-                // Get the length of the lines array and remove the first element.
-                const linesLength = lines.length;
                 lines.splice(0, 1);
 
-                // Get the new length of the lines array and remove the last 3 elements.
                 const newLinesLength = lines.length;
                 lines.splice(newLinesLength - 3, 3);
 
                 console.log("New Lines: ", lines);
-
-                // Loop through all of the lines. If the line starts with NR5G then add it to the nr5g_cells array. If it starts with LTE then add it to the lte_cells array.
 
                 for (let i = 0; i < lines.length; i++) {
                   if (
@@ -1916,19 +1932,29 @@
                     }
                   }
                 }
-              })
-              .then(() => {
+
                 this.parseNr5gCells();
-              })
-              .then(() => {
                 this.parseLTECells();
-              })
-              .then(() => {
                 this.generateTableRow();
-                this.isLoading = false;
-                this.isCellScanning = false;
+                this.showError = false;
+                this.errorMessage = "";
                 this.resultDoneCell = true;
-              });
+              } catch (parseError) {
+                console.error("Errore nel parsing della scansione celle:", parseError);
+                this.handleScanError(
+                  "Errore nel parsing della scansione delle celle.",
+                  "cell"
+                );
+              }
+            } catch (error) {
+              this.handleScanError(
+                error.message || "Errore imprevisto durante la scansione delle celle.",
+                "cell"
+              );
+            } finally {
+              this.isLoading = false;
+              this.isCellScanning = false;
+            }
           },
           parseNr5gCells() {
             // Parse the NR5G cells
@@ -2069,8 +2095,7 @@
             return this.networkNames[mccmnc] || `${mcc} ${mnc}`;
           },
 
-          getNeighbourcellLTEandNR5G() {
-            // this.clearTableRowsBodyNeighbourCells();
+          async getNeighbourcellLTEandNR5G() {
             // Reset the array before generating new rows
             this.lte_neighbourCells = [];
             this.nr5g_neighbourCells = [];
@@ -2080,41 +2105,43 @@
             this.atcmd =
               'AT+QENG="neighbourcell";+QNWCFG="nr5g_meas_info",1;+QNWCFG="nr5g_meas_info"';
             this.isLoading = true;
+            this.resultDoneNeighbourCell = false;
 
-            fetch(
-              "/cgi-bin/get_atcommand?" +
-                new URLSearchParams({
-                  atcmd: this.atcmd,
-                })
-            )
-              .then((res) => {
-                return res.text();
-              })
-              .then((data) => {
-                const rawdata = data;
+            try {
+              const result = await ATCommandService.execute(this.atcmd, {
+                retries: 3,
+                timeout: 60000,
+              });
+
+              if (!result.ok || !result.data) {
+                const message = result.error
+                  ? result.error.message
+                  : "La scansione delle celle vicine non ha restituito dati.";
+                this.handleScanError(message, "neighbour");
+                return;
+              }
+
+              try {
+                const rawdata = result.data;
                 console.log(rawdata);
 
                 let lines = rawdata.split("\n");
                 console.log("Lines: ", lines);
 
-                // Get the length of the lines array and remove the first element.
-                const linesLength = lines.length;
                 lines.splice(0, 1);
 
-                // Get the new length of the lines array and remove the last 3 elements.
                 const newLinesLength = lines.length;
                 lines.splice(newLinesLength - 3, 3);
 
-                // Remove an index with "" from the array.
                 for (let i = 0; i < lines.length; i++) {
                   if (lines[i] === "" || lines[i] === "\r") {
                     lines.splice(i, 1);
+                    i--;
                   }
                 }
 
                 console.log("Modified: ", lines);
 
-                // Loop through all of the lines. If the line match with LTE then add it to the lte_neighbourCells array. Otherwise, add it to the nr5g_neighbourCells array.
                 for (let i = 0; i < lines.length; i++) {
                   if (lines[i].match(/LTE/g)) {
                     this.lte_neighbourCells.push(lines[i]);
@@ -2122,18 +2149,33 @@
                     this.nr5g_neighbourCells.push(lines[i]);
                   }
                 }
-              })
-              .then(() => {
+
                 this.lteNeighbourCellsParse();
-              })
-              .then(() => {
                 this.nr5gNeighbourCellsParse();
-              })
-              .then(() => {
                 this.generateNeighbourCellsTableRow();
-                this.isLoading = false;
+
+                this.showError = false;
+                this.errorMessage = "";
                 this.resultDoneNeighbourCell = true;
-              });
+              } catch (parseError) {
+                console.error(
+                  "Errore nel parsing della scansione delle celle vicine:",
+                  parseError
+                );
+                this.handleScanError(
+                  "Errore nel parsing della scansione delle celle vicine.",
+                  "neighbour"
+                );
+              }
+            } catch (error) {
+              this.handleScanError(
+                error.message ||
+                  "Errore imprevisto durante la scansione delle celle vicine.",
+                "neighbour"
+              );
+            } finally {
+              this.isLoading = false;
+            }
           },
 
           lteNeighbourCellsParse() {

@@ -375,6 +375,7 @@
         </div>
       </div>
     </main>
+    <script src="js/atcommand-utils.js"></script>
     <script src="js/dark-mode.js"></script>
     <script>
       function simpleSettings() {
@@ -390,6 +391,7 @@
           countdown: 0,
           atCommandResponse: "",
           currentSettingsResponse: "",
+          errorMessage: "",
           ttldata: null,
           ttlvalue: 0,
           ttlStatus: false,
@@ -409,7 +411,17 @@
             this.showModal = true;
           },
 
-          sendATCommand() {
+          handleAtError(message, data = "") {
+            this.errorMessage = message;
+            this.showError = true;
+            if (data) {
+              this.atCommandResponse = data;
+            }
+            this.isLoading = false;
+            console.error("AT command error:", message);
+          },
+
+          async sendATCommand() {
             if (!this.atcmd) {
               // Use ATI as default command
               this.atcmd = "ATI";
@@ -419,51 +431,54 @@
               );
             }
             this.isLoading = true;
-            const encodedATCmd = encodeURIComponent(this.atcmd);
-            const url = `/cgi-bin/get_atcommand?atcmd=${encodedATCmd}`;
 
-            fetch(url)
-              .then((res) => {
-                if (!res.ok) {
-                  throw new Error(`HTTP error! status: ${res.status}`);
-                }
-                return res.text();
-              })
-              .then((data) => {
-                this.atCommandResponse = data;
-                this.isLoading = false;
-                this.isClean = false;
-                //this.fetchCurrentSettings();
-              })
-              .catch((error) => {
-                console.error("Error: ", error);
-                this.showError = true;
-                this.isLoading = false;
+            try {
+              const result = await ATCommandService.execute(this.atcmd, {
+                retries: 3,
+                timeout: 12000,
               });
+
+              if (!result.ok) {
+                const message = result.error
+                  ? result.error.message
+                  : "Errore sconosciuto durante l'esecuzione del comando.";
+                this.handleAtError(message, result.data);
+                return;
+              }
+
+              this.atCommandResponse = result.data;
+              this.showError = false;
+              this.isClean = false;
+            } catch (error) {
+              this.handleAtError(
+                error.message || "Errore di rete durante l'esecuzione del comando."
+              );
+            } finally {
+              this.isLoading = false;
+            }
           },
 
-          sendUserATCommand() {
+          async sendUserATCommand() {
             this.isLoading = true;
             const encodedATCmd = encodeURIComponent(this.atcmd);
             const url = `/cgi-bin/user_atcommand?atcmd=${encodedATCmd}`;
 
-            fetch(url)
-              .then((res) => {
-                if (!res.ok) {
-                  throw new Error(`HTTP error! status: ${res.status}`);
-                }
-                return res.text();
-              })
-              .then((data) => {
-                this.atCommandResponse = data;
-                this.isLoading = false;
-                this.isClean = false;
-              })
-              .catch((error) => {
-                console.error("Error: ", error);
-                this.showError = true;
-                this.isLoading = false;
-              });
+            try {
+              const response = await fetch(url);
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              const data = await response.text();
+              this.atCommandResponse = data;
+              this.showError = false;
+              this.isClean = false;
+            } catch (error) {
+              this.handleAtError(
+                error.message || "Errore di rete durante l'esecuzione del comando personalizzato."
+              );
+            } finally {
+              this.isLoading = false;
+            }
           },
 
           clearResponses() {
@@ -524,18 +539,20 @@
             this.sendATCommand();
           },
 
-          onBoardDNSProxyEnable() {
+          async onBoardDNSProxyEnable() {
             this.atcmd = 'AT+QMAP="DHCPV4DNS","enable"';
-            this.sendATCommand().then(() => {
-              this.fetchCurrentSettings();
-            });
+            const result = await this.sendATCommand();
+            if (result && result.ok) {
+              await this.fetchCurrentSettings();
+            }
           },
 
-          onBoardDNSProxyDisable() {
+          async onBoardDNSProxyDisable() {
             this.atcmd = 'AT+QMAP="DHCPV4DNS","disable"';
-            this.sendATCommand().then(() => {
-              this.fetchCurrentSettings();
-            });
+            const result = await this.sendATCommand();
+            if (result && result.ok) {
+              await this.fetchCurrentSettings();
+            }
           },
 
           usbNetModeChanger() {
@@ -561,68 +578,64 @@
             this.rebootDevice();
           },
 	  
-          fetchCurrentSettings() {
+          async fetchCurrentSettings() {
             this.fetchATCommand =
               'AT+QMAP="MPDN_RULE";+QMAP="DHCPV4DNS";+QCFG="usbnet"';
-            fetch(
-              "/cgi-bin/get_atcommand?" +
-                new URLSearchParams({
-                  atcmd: this.fetchATCommand,
-                })
-            )
-              .then((res) => {
-                return res.text();
-              })
-              .then((data) => {
-                // Set the value of currentSettingsResponse
-                this.currentSettingsResponse = data;
-                const currentData = data.split("\n");
-                console.log("Lines: ", currentData);
 
-                const testEthpass = currentData[1].match(
-                  /\+QMAP: "MPDN_rule",0,0,0,0,0/
-                );
-
-                if (testEthpass) {
-                  this.ipPassStatus = false;
-                } else {
-                  this.ipPassStatus = true;
-                }
-
-                const testDNSProxy = currentData[6].match(
-                  /\+QMAP: "DHCPV4DNS","enable"/
-                );
-
-                if (testDNSProxy) {
-                  this.DNSProxyStatus = true;
-                } else {
-                  this.DNSProxyStatus = false;
-                }
-
-                const testUSBNet = currentData[8].match(
-                  /\+QCFG: "usbnet",(\d)/
-                );
-
-                if (testUSBNet[1] == "0") {
-                  this.currentUsbNetMode = "RMNET";
-                } else if (testUSBNet[1] == "1") {
-                  this.currentUsbNetMode = "ECM";
-                } else if (testUSBNet[1] == "2") {
-                  this.currentUsbNetMode = "MBIM";
-                } else if (testUSBNet[1] == "3") {
-                  this.currentUsbNetMode = "RNDIS";
-                } else {
-                  this.currentUsbNetMode = "Unknown";
-                }
-
-                // clear atcmd
-                this.atcmd = "";
-              })
-              .catch((error) => {
-                console.error("Error: ", error);
-                this.showError = true;
+            try {
+              const result = await ATCommandService.execute(this.fetchATCommand, {
+                retries: 2,
+                timeout: 12000,
               });
+
+              if (!result.ok || !result.data) {
+                const message = result.error
+                  ? result.error.message
+                  : 'Impossibile recuperare le impostazioni correnti.';
+                this.errorMessage = message;
+                console.warn('Errore fetchCurrentSettings:', message);
+                return;
+              }
+
+              this.currentSettingsResponse = result.data;
+              const currentData = result.data.split("\n");
+
+              const getLine = (index) => (currentData[index] ? currentData[index] : '');
+
+              const testEthpass = getLine(1).match(/\+QMAP: \"MPDN_rule\",0,0,0,0,0/);
+
+              this.ipPassStatus = !testEthpass;
+
+              const testDNSProxy = getLine(6).match(/\+QMAP: \"DHCPV4DNS\","enable"/);
+
+              this.DNSProxyStatus = Boolean(testDNSProxy);
+
+              const testUSBNet = getLine(8).match(/\+QCFG: \"usbnet\",(\d)/);
+
+              if (testUSBNet && testUSBNet[1] !== undefined) {
+                const mode = testUSBNet[1];
+                if (mode === '0') {
+                  this.currentUsbNetMode = 'RMNET';
+                } else if (mode === '1') {
+                  this.currentUsbNetMode = 'ECM';
+                } else if (mode === '2') {
+                  this.currentUsbNetMode = 'MBIM';
+                } else if (mode === '3') {
+                  this.currentUsbNetMode = 'RNDIS';
+                } else {
+                  this.currentUsbNetMode = 'Unknown';
+                }
+              } else {
+                this.currentUsbNetMode = 'Unknown';
+              }
+
+              this.atcmd = '';
+            } catch (error) {
+              this.errorMessage = error.message || 'Errore di rete durante il recupero delle impostazioni correnti.';
+              console.error('Errore in fetchCurrentSettings:', error);
+            }
           },
+
 */
           fetchTTL() {
             fetch("/cgi-bin/get_ttl_status")
