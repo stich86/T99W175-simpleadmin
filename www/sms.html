@@ -161,7 +161,8 @@
       </div>
     </div>
   </main>
-  <script src="js/dark-mode.js"></script>
+    <script src="js/atcommand-utils.js"></script>
+    <script src="js/dark-mode.js"></script>
   <script>
     function fetchSMS() {
       return {
@@ -174,6 +175,8 @@
         phoneNumber: '',
         messageToSend: '',
         messageIndices: [], // 确保初始化messageIndices数组
+        showError: false,
+        errorMessage: "",
 
         // 清除现有数据
         clearData() {
@@ -188,21 +191,49 @@
           }
         },
 
+        handleError(message, data = "") {
+          this.errorMessage = message;
+          this.showError = true;
+          if (data) {
+            this.atCommandResponse = data;
+          }
+          console.error("SMS error:", message);
+        },
+
         // 请求获取短信
-        requestSMS() {
+        async requestSMS() {
           this.isLoading = true;
-          fetch(`/cgi-bin/get_atcommand?${new URLSearchParams({ atcmd: "AT+CSMS=1;+CSDH=0;+CNMI=2,1,0,0,0;+CMGF=1;+CSCA?;+CSMP=17,167,0,8;+CPMS=\"SM\",\"SM\",\"SM\";+CSCS=\"UCS2\";+CMGL=\"ALL\"" })}`)
-            .then(response => response.text())
-            .then(data => {
-              this.atCommandResponse = data.split('\n')
-                .filter(line => line.trim() !== "OK" && line.trim() !== "")
-                .join('\n');
-            })
-            .finally(() => {
-              this.isLoading = false;
-              this.clearData();
-              this.parseSMSData(this.atCommandResponse);
+          const atcmd =
+            'AT+CSMS=1;+CSDH=0;+CNMI=2,1,0,0,0;+CMGF=1;+CSCA?;+CSMP=17,167,0,8;+CPMS="SM","SM","SM";+CSCS="UCS2";+CMGL="ALL"';
+
+          try {
+            const result = await ATCommandService.execute(atcmd, {
+              retries: 2,
+              timeout: 20000,
             });
+
+            if (!result.ok || !result.data) {
+              const message = result.error
+                ? result.error.message
+                : "Impossibile recuperare gli SMS dal modem.";
+              this.handleError(message, result.data);
+              return;
+            }
+
+            this.atCommandResponse = result.data
+              .split('\n')
+              .filter((line) => line.trim() !== "OK" && line.trim() !== "")
+              .join('\n');
+
+            this.clearData();
+            this.parseSMSData(this.atCommandResponse);
+            this.showError = false;
+            this.errorMessage = "";
+          } catch (error) {
+            this.handleError(error.message || "Errore di rete durante il recupero degli SMS.");
+          } finally {
+            this.isLoading = false;
+          }
         },
 
         // 解析短信数据的方法
@@ -280,7 +311,7 @@
         },
 
         // 删除选中的短信
-        deleteSelectedSMS() {
+        async deleteSelectedSMS() {
           if (this.selectedMessages.length === 0) {
             console.warn("没有选中的短信");
             return;
@@ -294,34 +325,63 @@
           const isAllSelected = this.selectedMessages.length === this.messages.length;
 
           if (isAllSelected) {
-            // 如果全选，则调用删除所有短信的方法
-            this.deleteAllSMS();
-          } else {
-            // 否则，删除选中的短信
-            const indicesToDelete = [];
-            this.selectedMessages.forEach(index => {
-              indicesToDelete.push(...this.messages[index].indices);
+            await this.deleteAllSMS();
+            return;
+          }
+
+          const indicesToDelete = [];
+          this.selectedMessages.forEach((index) => {
+            indicesToDelete.push(...this.messages[index].indices);
+          });
+          if (indicesToDelete.length === 0) {
+            console.warn("没有有效的短信索引");
+            return;
+          }
+
+          const atCommands = indicesToDelete
+            .map((index, i) => (i === 0 ? `AT+CMGD=${index}` : `+CMGD=${index}`))
+            .join(';');
+
+          try {
+            const result = await ATCommandService.execute(atCommands, {
+              retries: 2,
+              timeout: 15000,
             });
-            if (indicesToDelete.length === 0) {
-              console.warn("没有有效的短信索引");
+
+            if (!result.ok) {
+              const message = result.error
+                ? result.error.message
+                : "Impossibile eliminare gli SMS selezionati.";
+              this.handleError(message, result.data);
               return;
             }
 
-            // 拼接 AT 命令
-            const atCommands = indicesToDelete.map((index, i) => i === 0 ? `AT+CMGD=${index}` : `+CMGD=${index}`).join(';');
-            fetch(`/cgi-bin/get_atcommand?${new URLSearchParams({ atcmd: atCommands })}`)
-              .finally(() => {
-                this.selectedMessages = [];
-                this.requestSMS();
-              });
+            this.selectedMessages = [];
+            await this.requestSMS();
+          } catch (error) {
+            this.handleError(error.message || "Errore di rete durante l'eliminazione degli SMS.");
           }
         },
         // 删除所有短信
-        deleteAllSMS() {
-          fetch(`/cgi-bin/get_atcommand?${new URLSearchParams({ atcmd: "AT+CMGD=,4" })}`)
-            .finally(() => {
-              this.init();
+        async deleteAllSMS() {
+          try {
+            const result = await ATCommandService.execute('AT+CMGD=,4', {
+              retries: 2,
+              timeout: 15000,
             });
+
+            if (!result.ok) {
+              const message = result.error
+                ? result.error.message
+                : "Impossibile eliminare tutti gli SMS.";
+              this.handleError(message, result.data);
+              return;
+            }
+
+            await this.requestSMS();
+          } catch (error) {
+            this.handleError(error.message || "Errore di rete durante l'eliminazione degli SMS.");
+          }
         },
         // 发送短信
         encodeUCS2(input) {

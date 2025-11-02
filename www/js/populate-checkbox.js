@@ -1,6 +1,23 @@
-function populateCheckboxes(lte_band, nsa_nr5g_band, nr5g_band, locked_lte_bands, locked_nsa_bands, locked_sa_bands, cellLock) {
+function populateCheckboxes(
+  lte_band,
+  nsa_nr5g_band,
+  nr5g_band,
+  locked_lte_bands,
+  locked_nsa_bands,
+  locked_sa_bands,
+  cellLock
+) {
   var checkboxesForm = document.getElementById("checkboxForm");
-  var selectedMode = document.getElementById("networkModeBand").value;
+  var networkModeElement = document.getElementById("networkModeBand");
+
+  if (!checkboxesForm || !networkModeElement) {
+    console.warn(
+      "Impossibile popolare le checkbox: elementi richiesti mancanti."
+    );
+    return;
+  }
+
+  var selectedMode = networkModeElement.value;
   var bands;
   var prefix;
 
@@ -18,10 +35,25 @@ function populateCheckboxes(lte_band, nsa_nr5g_band, nr5g_band, locked_lte_bands
 
   checkboxesForm.innerHTML = ""; // Clear existing checkboxes
 
+  var safeSplit = function (value) {
+    if (typeof value !== "string" || value.length === 0) {
+      return [];
+    }
+
+    return value
+      .split(":")
+      .map(function (item) {
+        return item.trim();
+      })
+      .filter(function (item) {
+        return item.length > 0;
+      });
+  };
+
   // Store the locked bands in arrays
-  var locked_lte_bands_array = locked_lte_bands.split(":");
-  var locked_nsa_bands_array = locked_nsa_bands.split(":");
-  var locked_sa_bands_array = locked_sa_bands.split(":");
+  var locked_lte_bands_array = safeSplit(locked_lte_bands);
+  var locked_nsa_bands_array = safeSplit(locked_nsa_bands);
+  var locked_sa_bands_array = safeSplit(locked_sa_bands);
 
   var isBandLocked = function(band) {
     if (selectedMode === "LTE" && locked_lte_bands_array.includes(band)) {
@@ -38,11 +70,11 @@ function populateCheckboxes(lte_band, nsa_nr5g_band, nr5g_band, locked_lte_bands
 
   var fragment = document.createDocumentFragment();
 
-  if (bands !== null && bands !== "0") {
-    var bandsArray = bands.split(":");
+  if (typeof bands === "string" && bands.length > 0 && bands !== "0") {
+    var bandsArray = safeSplit(bands);
     var currentRow;
 
-    bandsArray.forEach(function(band, index) {
+    bandsArray.forEach(function (band, index) {
       if (index % 5 === 0) {
         currentRow = document.createElement("div");
         currentRow.className = "row mb-2 mx-auto"; // Add margin bottom for spacing
@@ -77,5 +109,7 @@ function populateCheckboxes(lte_band, nsa_nr5g_band, nr5g_band, locked_lte_bands
   }
 
   checkboxesForm.appendChild(fragment);
-  addCheckboxListeners(cellLock);
+  if (cellLock && typeof addCheckboxListeners === "function") {
+    addCheckboxListeners(cellLock);
+  }
 }

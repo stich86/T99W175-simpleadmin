@@ -23,7 +23,7 @@
   </head>
   <body>
     <main>
-      <div class="container my-4" x-data="cellLocking()">
+      <div class="container my-4" x-data="cellLocking()" x-init="init()">
         <nav class="navbar navbar-expand-lg mt-2">
           <div class="container-fluid">
             <a class="navbar-brand" href="/"
@@ -452,6 +452,7 @@
           isLoading: false,
           showModal: false,
           countdown: 0,
+          lastErrorMessage: "",
           networkModeCell: "-",
           earfcn1: null,
           pci1: null,
@@ -483,142 +484,87 @@
           prefNetworkMode: null,
           nrModeControl: "-",
           cellNum: null,
-          lte_bands: null,
-          nsa_bands: null,
-          sa_bands: null,
-          locked_lte_bands: null,
-          locked_nsa_bands: null,
-          locked_sa_bands: null,
-          currentNetworkMode: "-",
-          updatedLockedBands: null,
+          lte_bands: "",
+          nsa_bands: "",
+          sa_bands: "",
+          locked_lte_bands: "",
+          locked_nsa_bands: "",
+          locked_sa_bands: "",
+          currentNetworkMode: "LTE",
+          updatedLockedBands: [],
           sim: "-",
           newSim: null,
           cellLockStatus: "Unknown",
           bands: "Fetching Bands...",
           isGettingBands: false,
-          rawdata: null,
+          rawdata: "",
+          networkModeListenerAttached: false,
+          providerBandsListenerAttached: false,
 
-          getSupportedBands() {
+          async getSupportedBands() {
             // Load the checkbox state from localStorage
             const isChecked =
               localStorage.getItem("providerBandsChecked") === "true";
             const providerBands = document.getElementById("providerBands");
-            providerBands.checked = isChecked;
 
-            // If the checkbox is checked, then show only the provider bands
-            if (providerBands.checked) {
-              const atcmd = 'AT^BAND_PREF_EXT?';
-              this.sendATcommand(atcmd)
-                .then((rawdata) => {
-                  this.rawdata = rawdata;
-                  this.parseSupportedBands(rawdata);
-                })
-                .then(() => {
-                  this.getLockedBands();
-                });
-            } else {
-              const atcmd = 'AT^BAND_PREF_EXT?';
-              this.sendATcommand(atcmd)
-                .then((rawdata) => {
-                  this.rawdata = rawdata;
-                  this.parseSupportedBands(rawdata);
-                })
-                .then(() => {
-                  this.getLockedBands();
-                });
+            if (providerBands) {
+              providerBands.checked = isChecked;
+            }
+
+            const atcmd = 'AT^BAND_PREF_EXT?';
+            this.isGettingBands = true;
+
+            try {
+              const result = await this.sendATcommand(atcmd);
+
+              if (!result.ok || !result.data) {
+                console.warn(
+                  "Impossibile recuperare le bande supportate:",
+                  this.lastErrorMessage
+                );
+                this.bands = "Bande non disponibili";
+                return;
+              }
+
+              this.rawdata = result.data;
+              this.parseSupportedBands(result.data);
+
+              await this.getLockedBands();
+            } finally {
+              this.isGettingBands = false;
             }
           },
 
-parseSupportedBands(rawdata) {
-  const data = rawdata;
-  // 匹配每种模式（WCDMA / LTE / NR5G_NSA / NR5G_SA）和两种类型（Enable/Disable）
-  const regex = /(WCDMA|LTE|NR5G_NSA|NR5G_SA),\s*(Enable|Disable) Bands\s*:(.*)/g;
+          parseSupportedBands(rawdata) {
+            const data = rawdata;
+            const regex = /(WCDMA|LTE|NR5G_NSA|NR5G_SA),\s*(Enable|Disable) Bands\s*:(.*)/g;
 
-  const bands = {
-    lte_band: [],
-    nsa_nr5g_band: [],
-    nr5g_band: [],
-  };
+            const bands = {
+              lte_band: [],
+              nsa_nr5g_band: [],
+              nr5g_band: [],
+            };
 
-  let match;
-  while ((match = regex.exec(data)) !== null) {
-    const mode = match[1];   // LTE / NR5G_NSA / NR5G_SA / WCDMA
-    const type = match[2];   // Enable / Disable
-    const numbers = match[3]
-      .split(",")
-      .map(s => s.trim())
-      .filter(Boolean)
-      .map(Number);
+            let match;
+            while ((match = regex.exec(data)) !== null) {
+              const mode = match[1];
+              const numbers = match[3]
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map(Number)
+                .filter((value) => !Number.isNaN(value));
 
-    // 合并 Enable 和 Disable
-    if (mode === "LTE") bands.lte_band.push(...numbers);
-    if (mode === "NR5G_NSA") bands.nsa_nr5g_band.push(...numbers);
-    if (mode === "NR5G_SA") bands.nr5g_band.push(...numbers);
-  }
+              if (mode === "LTE") bands.lte_band.push(...numbers);
+              if (mode === "NR5G_NSA") bands.nsa_nr5g_band.push(...numbers);
+              if (mode === "NR5G_SA") bands.nr5g_band.push(...numbers);
+            }
 
-  // 去重 + 排序（可选）
-  const uniqSort = arr => [...new Set(arr)].sort((a, b) => a - b);
+            const uniqSort = (arr) => [...new Set(arr)].sort((a, b) => a - b);
 
-  this.lte_bands = uniqSort(bands.lte_band).join(":");
-  this.nsa_bands = uniqSort(bands.nsa_nr5g_band).join(":");
-  this.sa_bands = uniqSort(bands.nr5g_band).join(":");
-
-  console.log("解析结果:", bands);
-},
-
-          getLockedBands() {
-            const atcmd =
-              'AT^BAND_PREF_EXT?';
-
-            this.sendATcommand(atcmd)
-              .then((rawdata) => {
-                this.rawdata = rawdata;
-                this.parseLockedBands(rawdata);
-              })
-              .then(() => {
-                // Call current settings
-                this.getCurrentSettings();
-              });
-          },
-
-parseLockedBands(rawdata) {
-  const data = rawdata;
-
-  // 只匹配 LTE、NR5G_NSA、NR5G_SA 的 Enable Bands 行
-  const regex = /(LTE|NR5G_NSA|NR5G_SA),\s*Enable Bands\s*:(.*)/g;
-
-  const bands = {
-    lte_band: [],
-    nsa_nr5g_band: [],
-    nr5g_band: [],
-  };
-
-  let match;
-  while ((match = regex.exec(data)) !== null) {
-    const mode = match[1]; // LTE / NR5G_NSA / NR5G_SA
-    const numbers = match[2]
-      .split(",")
-      .map(s => s.trim())
-      .filter(Boolean)
-      .map(Number);
-
-    switch (mode) {
-      case "LTE":
-        bands.lte_band = numbers;
-        break;
-      case "NR5G_NSA":
-        bands.nsa_nr5g_band = numbers;
-        break;
-      case "NR5G_SA":
-        bands.nr5g_band = numbers;
-        break;
-    }
-  }
-
-  // 拼接成字符串
-  this.locked_lte_bands = bands.lte_band.join(":");
-  this.locked_nsa_bands = bands.nsa_nr5g_band.join(":");
-  this.locked_sa_bands = bands.nr5g_band.join(":");
+            this.lte_bands = uniqSort(bands.lte_band).join(":");
+            this.nsa_bands = uniqSort(bands.nsa_nr5g_band).join(":");
+            this.sa_bands = uniqSort(bands.nr5g_band).join(":");
 
             populateCheckboxes(
               this.lte_bands,
@@ -629,28 +575,120 @@ parseLockedBands(rawdata) {
               this.locked_sa_bands,
               this
             );
-  console.log("Enable Bands 解析结果:", bands);
-},
+
+            if (typeof this.trackCheckboxChanges === "function") {
+              this.trackCheckboxChanges();
+            }
+          },
+
+          async getLockedBands() {
+            const atcmd =
+              'AT^BAND_PREF_EXT?';
+
+            const result = await this.sendATcommand(atcmd);
+
+            if (!result.ok || !result.data) {
+              console.warn(
+                "Impossibile recuperare le bande bloccate:",
+                this.lastErrorMessage
+              );
+              this.locked_lte_bands = "";
+              this.locked_nsa_bands = "";
+              this.locked_sa_bands = "";
+              populateCheckboxes(
+                this.lte_bands,
+                this.nsa_bands,
+                this.sa_bands,
+                this.locked_lte_bands,
+                this.locked_nsa_bands,
+                this.locked_sa_bands,
+                this
+              );
+              return;
+            }
+
+            this.rawdata = result.data;
+            this.parseLockedBands(result.data);
+
+            this.getCurrentSettings();
+          },
+
+          parseLockedBands(rawdata) {
+            const data = rawdata;
+            const regex = /(LTE|NR5G_NSA|NR5G_SA),\s*Enable Bands\s*:(.*)/g;
+
+            const bands = {
+              lte_band: [],
+              nsa_nr5g_band: [],
+              nr5g_band: [],
+            };
+
+            let match;
+            while ((match = regex.exec(data)) !== null) {
+              const mode = match[1];
+              const numbers = match[2]
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map(Number)
+                .filter((value) => !Number.isNaN(value));
+
+              switch (mode) {
+                case "LTE":
+                  bands.lte_band = numbers;
+                  break;
+                case "NR5G_NSA":
+                  bands.nsa_nr5g_band = numbers;
+                  break;
+                case "NR5G_SA":
+                  bands.nr5g_band = numbers;
+                  break;
+              }
+            }
+
+            this.locked_lte_bands = bands.lte_band.join(":");
+            this.locked_nsa_bands = bands.nsa_nr5g_band.join(":");
+            this.locked_sa_bands = bands.nr5g_band.join(":");
+
+            populateCheckboxes(
+              this.lte_bands,
+              this.nsa_bands,
+              this.sa_bands,
+              this.locked_lte_bands,
+              this.locked_nsa_bands,
+              this.locked_sa_bands,
+              this
+            );
+          },
 
           init() {
             // Function to populate checkboxes
-            const showPopulateCheckboxes = () => {
-              this.isGettingBands = true;
-              this.getSupportedBands();
-              this.isGettingBands = false;
+            const showPopulateCheckboxes = async () => {
+              try {
+                await this.getSupportedBands();
 
-              // Add event listeners to checkboxes after populating them
-              addCheckboxListeners(this);
+                // Add event listeners to checkboxes after populating them
+                addCheckboxListeners(this);
+
+                if (typeof this.trackCheckboxChanges === "function") {
+                  this.trackCheckboxChanges();
+                }
+              } catch (error) {
+                console.error(
+                  "Errore durante il popolamento delle bande supportate:",
+                  error
+                );
+              }
             };
 
             // Function to track checkbox changes
             this.trackCheckboxChanges = () => {
-              var selectedMode =
-                document.getElementById("networkModeBand").value;
-              var checkboxes = document.querySelectorAll(
-                'input[type="checkbox"]'
+              const modeDropdown = document.getElementById("networkModeBand");
+              const selectedMode = modeDropdown ? modeDropdown.value : null;
+              const checkboxes = document.querySelectorAll(
+                '#checkboxForm input[type="checkbox"]'
               );
-              var newCheckedValues = [];
+              const newCheckedValues = [];
 
               checkboxes.forEach(function (checkbox) {
                 if (checkbox.checked) {
@@ -659,29 +697,72 @@ parseLockedBands(rawdata) {
               });
 
               // Update currentNetworkMode and updatedLockedBands
-              this.currentNetworkMode = selectedMode;
+              this.currentNetworkMode = selectedMode || this.currentNetworkMode;
               this.updatedLockedBands = newCheckedValues;
             };
 
             // Function to add event listener to network mode dropdown
             const addNetworkModeListener = () => {
-              document
-                .getElementById("networkModeBand")
-                .addEventListener("change", function () {
-                  showPopulateCheckboxes(); // Update checkboxes when network mode changes
-                });
+              if (this.networkModeListenerAttached) {
+                return;
+              }
+
+              const dropdown = document.getElementById("networkModeBand");
+
+              if (!dropdown) {
+                console.warn("Dropdown delle modalità di rete non trovato.");
+                return;
+              }
+
+              dropdown.addEventListener("change", () => {
+                showPopulateCheckboxes(); // Update checkboxes when network mode changes
+              });
+
+              this.networkModeListenerAttached = true;
+            };
+
+            const addProviderBandsListener = () => {
+              if (this.providerBandsListenerAttached) {
+                return;
+              }
+
+              const providerBands = document.getElementById("providerBands");
+
+              if (!providerBands) {
+                console.warn("Checkbox per le bande del provider non trovata.");
+                return;
+              }
+
+              providerBands.addEventListener("change", () => {
+                showPopulateCheckboxes();
+              });
+
+              this.providerBandsListenerAttached = true;
             };
 
             // Execute necessary functions on initialization
             showPopulateCheckboxes();
             addNetworkModeListener();
+            addProviderBandsListener();
           },
-          getCurrentSettings() {
+          async getCurrentSettings() {
             const atcmd =
               'AT^SWITCH_SLOT?;+CGCONTRDP=1;+CGDCONT?;^BAND_PREF_EXT?;^CA_INFO?;^SLMODE?';
 
-            this.sendATcommand(atcmd).then((rawdata) => {
-              const settings = parseCurrentSettings(rawdata);
+            const result = await this.sendATcommand(atcmd);
+
+            if (!result.ok || !result.data) {
+              console.warn("Impossibile recuperare le impostazioni correnti:", this.lastErrorMessage);
+              return;
+            }
+
+            try {
+              const settings = parseCurrentSettings(result.data);
+
+              if (!settings) {
+                throw new Error('Risposta inattesa dal modem.');
+              }
+
               this.sim = settings.sim;
               this.apn = settings.apn;
               this.apnIP = settings.apnIP;
@@ -689,45 +770,62 @@ parseLockedBands(rawdata) {
               this.prefNetwork = settings.prefNetwork;
               this.nrModeControl = settings.nrModeControl;
               this.bands = settings.bands;
-            });
+            } catch (error) {
+              this.lastErrorMessage = error.message || 'Errore nel parsing delle impostazioni correnti.';
+              console.error('Errore durante il parsing delle impostazioni correnti:', error);
+            }
           },
-          lockSelectedBands() {
+
+          async lockSelectedBands() {
             // Get the updated this.currentNetworkMode = selectedMode; and this.updatedLockedBands = newCheckedValues;
-            const selectedMode = this.currentNetworkMode;
-            const newCheckedValues = this.updatedLockedBands;
+            const selectedMode =
+              this.currentNetworkMode ||
+              (document.getElementById("networkModeBand") || {}).value ||
+              null;
+            const newCheckedValues = Array.isArray(this.updatedLockedBands)
+              ? this.updatedLockedBands
+              : [];
             let atcmd;
 
             // Check if both values are null then show the error message
-            if (selectedMode === null || newCheckedValues === null) {
+            if (selectedMode === null || newCheckedValues.length === 0) {
+              alert("Seleziona almeno una banda da bloccare.");
             } else {
               if (selectedMode === "LTE") {
-		console.log(newCheckedValues.join(
-                  ":"
-                ));
-		let bandss = newCheckedValues.join(
-                  ","
-                ).replace(/,$/, "");
+                let bandss = newCheckedValues
+                  .join(",")
+                  .replace(/,$/, "");
                 atcmd = `AT^BAND_PREF=LTE,2,${bandss}`;
-                this.sendATcommand(atcmd);
               } else if (selectedMode === "NSA") {
-                let bandss = newCheckedValues.join(
-                  ","
-                ).replace(/,$/, "");
+                let bandss = newCheckedValues
+                  .join(",")
+                  .replace(/,$/, "");
                 atcmd = `AT^BAND_PREF=NR5G,2,${bandss}`;
-                this.sendATcommand(atcmd);
               } else if (selectedMode === "SA") {
-                let bandss = newCheckedValues.join(
-                  ","
-                ).replace(/,$/, "");
+                let bandss = newCheckedValues
+                  .join(",")
+                  .replace(/,$/, "");
                 atcmd = `AT^BAND_PREF=NR5G,2,${bandss}`;
-                this.sendATcommand(atcmd);
               } else {
                 alert("Invalid network mode selected");
+                return;
               }
 
               // Do a 2 second countdown
               this.showModal = true;
               this.countdown = 2;
+
+              const result = await this.sendATcommand(atcmd);
+
+              if (!result.ok) {
+                this.showModal = false;
+                alert(
+                  this.lastErrorMessage ||
+                    "Impossibile bloccare le bande selezionate. Riprova."
+                );
+                return;
+              }
+
               const interval = setInterval(() => {
                 this.countdown--;
                 if (this.countdown === 0) {
@@ -740,13 +838,22 @@ parseLockedBands(rawdata) {
               }, 1000);
             }
           },
-          resetBandLocking() {
+          async resetBandLocking() {
             // Send the atcmd command to reset the locked bands
             const atcmd = 'AT^BAND_PREF_EXT';
 
             this.showModal = true;
 
-            this.sendATcommand(atcmd);
+            const result = await this.sendATcommand(atcmd);
+
+            if (!result.ok) {
+              this.showModal = false;
+              alert(
+                this.lastErrorMessage ||
+                  "Impossibile ripristinare il blocco delle bande."
+              );
+              return;
+            }
 
             this.countdown = 5;
             const interval = setInterval(() => {
@@ -759,11 +866,8 @@ parseLockedBands(rawdata) {
                 this.init();
               }
             }, 1000);
-
-            // Run init function to repopulate the checkboxes
-            this.init();
           },
-          saveChanges() {
+          async saveChanges() {
             const newApn = this.newApn;
             const newSim = this.newSim;
             const prefNetworkMode = this.prefNetworkMode;
@@ -784,7 +888,6 @@ parseLockedBands(rawdata) {
               } else if (this.newApnIP === "4") {
                 atAPN = `+CGDCONT=1,"PPP","${newApn}";`;
               } else {
-                console.log("No changes made");
                 atAPN = `+CGDCONT=1,"IPV4V6","${newApn}";`;
               }
             }
@@ -795,7 +898,6 @@ parseLockedBands(rawdata) {
             if (prefNetworkMode !== null) {
               ATNetwork = `^SLMODE=1,${prefNetworkMode};`;
             }
-		console.log(prefNetworkMode);
             if (nrModeControl !== this.nrModeControl) {
               ATNRMode = `+QNWPREFCFG="nr5g_disable_mode",${nrModeControl}`;
             }
@@ -805,27 +907,17 @@ parseLockedBands(rawdata) {
             atcmd = atcmd.replace("+^", "^");
             if (atcmd !== "AT+") {
               this.showModal = true;
-              console.log(atcmd);
-	/*
-              // If atcmd has QUIMSLOT,  do a reboot instead
-              if (atcmd.includes("sssss")) {
-                atcmd = atcmd + "+CFUN=1,1";
-                this.sendATcommand(atcmd);
-                this.countdown = 45;
 
-                const interval = setInterval(() => {
-                  this.countdown--;
-                  if (this.countdown === 0) {
-                    clearInterval(interval);
-                    this.showModal = false;
-                    this.init();
-                  }
-                }, 1000);
+              const result = await this.sendATcommand(atcmd);
 
+              if (!result.ok) {
+                this.showModal = false;
+                alert(
+                  this.lastErrorMessage ||
+                    "Impossibile salvare le modifiche di rete."
+                );
                 return;
-              }*/
-
-              this.sendATcommand(atcmd);
+              }
               // Do a 15 second countdown
               this.countdown = 15;
 
@@ -841,7 +933,7 @@ parseLockedBands(rawdata) {
               alert("No changes made");
             }
           },
-          cellLockEnableLTE() {
+          async cellLockEnableLTE() {
             const cellNum = this.cellNum;
 
             if (cellNum === null) {
@@ -880,7 +972,16 @@ parseLockedBands(rawdata) {
 
             // Mock data
             this.showModal = true;
-            this.sendATcommand(atcmd);
+            const result = await this.sendATcommand(atcmd);
+
+            if (!result.ok) {
+              this.showModal = false;
+              alert(
+                this.lastErrorMessage ||
+                  "Impossibile applicare il blocco LTE."
+              );
+              return;
+            }
 
             // Do a 15 second countdown
             this.countdown = 15;
@@ -892,7 +993,7 @@ parseLockedBands(rawdata) {
               }
             }, 1000);
           },
-          cellLockEnableNR() {
+          async cellLockEnableNR() {
             const earfcn = this.earfcn1;
             const pci = this.pci1;
             const scs = this.scs;
@@ -913,7 +1014,16 @@ parseLockedBands(rawdata) {
 
             // Mock data
             this.showModal = true;
-            this.sendATcommand(atcmd);
+            const result = await this.sendATcommand(atcmd);
+
+            if (!result.ok) {
+              this.showModal = false;
+              alert(
+                this.lastErrorMessage ||
+                  "Impossibile applicare il blocco NR5G."
+              );
+              return;
+            }
 
             // Do a 15 second countdown
             this.countdown = 15;
@@ -925,12 +1035,21 @@ parseLockedBands(rawdata) {
               }
             }, 1000);
           },
-          cellLockDisableLTE() {
+          async cellLockDisableLTE() {
             // Send the atcmd command to reset the locked bands
             const atcmd = 'AT^LTE_LOCK';
             this.showModal = true;
 
-            this.sendATcommand(atcmd);
+            const result = await this.sendATcommand(atcmd);
+
+            if (!result.ok) {
+              this.showModal = false;
+              alert(
+                this.lastErrorMessage ||
+                  "Impossibile disattivare il blocco LTE."
+              );
+              return;
+            }
 
             this.countdown = 15;
             const interval = setInterval(() => {
@@ -941,13 +1060,22 @@ parseLockedBands(rawdata) {
               }
             }, 1000);
           },
-          cellLockDisableNR() {
+          async cellLockDisableNR() {
             // Send the atcmd command to reset the locked bands
             const atcmd = 'AT^NR5G_LOCK';
 
             this.showModal = true;
 
-            this.sendATcommand(atcmd);
+            const result = await this.sendATcommand(atcmd);
+
+            if (!result.ok) {
+              this.showModal = false;
+              alert(
+                this.lastErrorMessage ||
+                  "Impossibile disattivare il blocco NR5G."
+              );
+              return;
+            }
 
             this.countdown = 15;
             const interval = setInterval(() => {
@@ -958,69 +1086,88 @@ parseLockedBands(rawdata) {
               }
             }, 1000);
           },
-          sendATcommand(atcmd) {
-            return fetch(
-              "/cgi-bin/get_atcommand?" +
-                new URLSearchParams({
-                  atcmd: atcmd,
-                })
-            )
-              .then((response) => response.text())
-              .then((data) => {
-                return data;
-              })
-              .catch((error) => {
-                console.error("Error:", error);
-                // Throw the error again to ensure it's propagated
-                throw error;
+          async sendATcommand(atcmd) {
+            if (!atcmd || typeof atcmd !== "string") {
+              const error = new Error("Comando AT non valido.");
+              this.lastErrorMessage = error.message;
+              console.error("AT command validation error:", error);
+              return { ok: false, data: "", error };
+            }
+
+            try {
+              const result = await ATCommandService.execute(atcmd, {
+                retries: 3,
+                timeout: 15000,
               });
+
+              if (!result.ok) {
+                const message = result.error
+                  ? result.error.message
+                  : "Errore sconosciuto durante l'esecuzione del comando.";
+                this.lastErrorMessage = message;
+                console.warn("AT command failed:", message);
+              } else {
+                this.lastErrorMessage = "";
+              }
+
+              return result;
+            } catch (error) {
+              const message = error.message || "Errore imprevisto durante il comando AT.";
+              this.lastErrorMessage = message;
+              console.error("AT command execution error:", error);
+              return { ok: false, data: "", error };
+            }
           },
         };
       }
 
       function addCheckboxListeners(cellLock) {
+        const checkboxes = document.querySelectorAll(
+          '#checkboxForm input[type="checkbox"]'
+        );
+
         // Remove existing event listeners
-        document
-          .querySelectorAll('input[type="checkbox"]')
-          .forEach(function (checkbox) {
-            checkbox.removeEventListener(
-              "change",
-              cellLock.trackCheckboxChanges
-            );
-          });
+        checkboxes.forEach(function (checkbox) {
+          checkbox.removeEventListener(
+            "change",
+            cellLock.trackCheckboxChanges
+          );
+        });
 
         // Add new event listeners
-        document
-          .querySelectorAll('input[type="checkbox"]')
-          .forEach(function (checkbox) {
-            checkbox.addEventListener("change", cellLock.trackCheckboxChanges);
-          });
+        checkboxes.forEach(function (checkbox) {
+          checkbox.addEventListener("change", cellLock.trackCheckboxChanges);
+        });
       }
 
-      // Function for unchecking all checkboxes
-      document
-        .getElementById("uncheckAll")
-        .addEventListener("click", function () {
+      (function () {
+        const uncheckButton = document.getElementById("uncheckAll");
+
+        if (!uncheckButton) {
+          console.warn('Pulsante "Uncheck All" non trovato.');
+          return;
+        }
+
+        uncheckButton.addEventListener("click", function () {
           document
-            .querySelectorAll('input[type="checkbox"]')
+            .querySelectorAll('#checkboxForm input[type="checkbox"]')
             .forEach(function (checkbox) {
               checkbox.checked = false;
+              checkbox.dispatchEvent(new Event("change", { bubbles: true }));
             });
         });
+      })();
 
-      // Function for setting the provider bands checkbox and fetching the bands
-      document
-        .getElementById("providerBands")
-        .addEventListener("change", function () {
-          cellLocking().getSupportedBands();
-        });
-
-      document.addEventListener("DOMContentLoaded", (event) => {
+      document.addEventListener("DOMContentLoaded", () => {
         loadCheckboxState();
       });
 
       function saveCheckboxState() {
         const providerBandsCheckbox = document.getElementById("providerBands");
+        if (!providerBandsCheckbox) {
+          console.warn("Impossibile salvare lo stato: checkbox non trovata.");
+          return;
+        }
         localStorage.setItem(
           "providerBandsChecked",
           providerBandsCheckbox.checked
@@ -1029,11 +1176,16 @@ parseLockedBands(rawdata) {
 
       function loadCheckboxState() {
         const providerBandsCheckbox = document.getElementById("providerBands");
+        if (!providerBandsCheckbox) {
+          console.warn("Impossibile caricare lo stato: checkbox non trovata.");
+          return;
+        }
         const isChecked =
           localStorage.getItem("providerBandsChecked") === "true";
         providerBandsCheckbox.checked = isChecked;
       }
     </script>
+    <script src="js/atcommand-utils.js"></script>
     <script src="js/dark-mode.js"></script>
   </body>
 </html>

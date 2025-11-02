@@ -355,6 +355,7 @@
         </div>
       </div>
     </main>
+    <script src="js/atcommand-utils.js"></script>
     <script src="js/dark-mode.js"></script>
     <script>
       function fetchDeviceInfo() {
@@ -373,12 +374,23 @@
           simpleAdminVersion: "-",
           atcmd: null,
           atCommandResponse: "",
+          errorMessage: "",
+          showError: false,
           showModal: false,
           isLoading: false,
           isRebooting: false,
           countdown: 3,
 
-          sendATCommand() {
+          handleError(message, data = "") {
+            this.errorMessage = message;
+            this.showError = true;
+            if (data) {
+              this.atCommandResponse = data;
+            }
+            console.error("AT command error:", message);
+          },
+
+          async sendATCommand() {
             if (!this.atcmd) {
               // Use ATI as default command
               console.log(
@@ -387,45 +399,56 @@
             }
 
             this.isLoading = true;
-            fetch(
-              "/cgi-bin/get_atcommand?" +
-                new URLSearchParams({
-                  atcmd: this.atcmd,
-                })
-            )
-              .then((res) => {
-                return res.text();
-              })
-              .then((data) => {
-                this.atCommandResponse = data;
-              })
-              .catch((error) => {
-                console.error("Error: ", error);
-                this.showError = true;
+
+            try {
+              const result = await ATCommandService.execute(this.atcmd, {
+                retries: 3,
+                timeout: 12000,
               });
+
+              if (!result.ok) {
+                const message = result.error
+                  ? result.error.message
+                  : "Errore sconosciuto durante l'esecuzione del comando.";
+                this.handleError(message, result.data);
+                return;
+              }
+
+              this.atCommandResponse = result.data;
+              this.showError = false;
+            } catch (error) {
+              this.handleError(error.message || "Errore di rete durante l'esecuzione del comando.");
+            } finally {
+              this.isLoading = false;
+            }
           },
 
-          fetchATCommand() {
+          async fetchATCommand() {
             this.atcmd =
               'AT+CGMI;+CGMM;^VERSION?;+CIMI;+ICCID;+CGSN;+CNUM;+CGCONTRDP=1';
             this.isLoading = true;
-            fetch(
-              "/cgi-bin/get_atcommand?" +
-                new URLSearchParams({
-                  atcmd: this.atcmd,
-                })
-            )
-              .then((res) => {
-                return res.text();
-              })
-              .then((data) => {
-                this.atCommandResponse = data;
-                this.parseFetchedData();
-              })
-              .catch((error) => {
-                console.error("Error: ", error);
-                this.showError = true;
+            try {
+              const result = await ATCommandService.execute(this.atcmd, {
+                retries: 3,
+                timeout: 15000,
               });
+
+              if (!result.ok) {
+                const message = result.error
+                  ? result.error.message
+                  : "Impossibile recuperare le informazioni del modem.";
+                this.handleError(message, result.data);
+                return;
+              }
+
+              this.atCommandResponse = result.data;
+              this.showError = false;
+              this.parseFetchedData();
+            } catch (error) {
+              this.handleError(error.message || "Errore di rete durante il recupero delle informazioni del modem.");
+            } finally {
+              this.isLoading = false;
+            }
           },
 
           fetchlanIp() {
@@ -437,33 +460,78 @@
           },
 
           parseFetchedData() {
-            const lines = this.atCommandResponse.split("\n");
-
-            console.log("AT Command Response: ", lines);
-
-            this.manufacturer = lines[1].trim();
-            this.modelName = lines[3].trim();
-            this.firmwareVersion = lines[5].split(":")[1].trim()
-            this.imei = lines[11].trim();
-            //this.lanIp = lines[13].trim().split(",")[3];
-            this.wwanIpv4 = lines[16].trim().split(",")[3].replace(/"/g, "");
-            this.wwanIpv6 = lines[16].trim().split(",")[4].replace(/"/g, "");
-
-            try {
-              this.imsi = lines[7];
-              this.iccid = lines[9].trim().replace("ICCID: ", "");
-              this.phoneNumber = lines[13].split(',')[1].replace(/"/g, '');
-              if (this.phoneNumber === "") {
-                this.phoneNumber = "Unknown";
-              }
-            } catch (error) {
-              this.phoneNumber = "No SIM Card Inserted or Detected";
-              this.imsi = " ";
-              this.iccid = " ";
+            if (!this.atCommandResponse) {
+              this.handleError("Risposta AT vuota dal modem.");
+              this.isLoading = false;
+              return;
             }
 
-            this.simpleAdminVersion = "SimpleAdminRev-Beta-1.0";
-            this.isLoading = false;
+            const lines = this.atCommandResponse.split("\n");
+            const safeGet = (index) =>
+              lines[index] ? lines[index].trim() : "";
+
+            try {
+              console.log("AT Command Response: ", lines);
+
+              this.manufacturer = safeGet(1) || "-";
+              this.modelName = safeGet(3) || "-";
+              const firmwareLine = safeGet(5);
+              this.firmwareVersion = firmwareLine.includes(":")
+                ? firmwareLine.split(":")[1].trim()
+                : firmwareLine;
+              this.imei = safeGet(11) || "-";
+
+              const pdpLine = safeGet(16);
+              if (pdpLine.includes(",")) {
+                const segments = pdpLine.split(",");
+                this.wwanIpv4 = segments[3] ? segments[3].replace(/"/g, "") : "-";
+                this.wwanIpv6 = segments[4] ? segments[4].replace(/"/g, "") : "-";
+              } else {
+                this.wwanIpv4 = "-";
+                this.wwanIpv6 = "-";
+              }
+
+              const imsiLine = safeGet(7);
+              this.imsi = imsiLine || "";
+
+              const iccidLine = safeGet(9);
+              this.iccid = iccidLine
+                ? iccidLine.replace("ICCID: ", "").trim()
+                : "";
+
+              const phoneLine = safeGet(13);
+              if (phoneLine.includes(",")) {
+                const phoneSegments = phoneLine.split(",");
+                this.phoneNumber = phoneSegments[1]
+                  ? phoneSegments[1].replace(/"/g, "").trim()
+                  : "Unknown";
+              } else {
+                this.phoneNumber = "Unknown";
+              }
+
+              if (!this.phoneNumber) {
+                this.phoneNumber = "Unknown";
+              }
+
+              if (!this.imsi) {
+                this.imsi = " ";
+              }
+
+              if (!this.iccid) {
+                this.iccid = " ";
+              }
+
+              this.simpleAdminVersion = "SimpleAdminRev-Beta-1.0";
+              this.showError = false;
+            } catch (error) {
+              console.error("Errore nel parsing delle informazioni del modem:", error);
+              this.handleError(
+                "Impossibile interpretare la risposta del modem.",
+                this.atCommandResponse
+              );
+            } finally {
+              this.isLoading = false;
+            }
           },
 
           updateIMEI() {

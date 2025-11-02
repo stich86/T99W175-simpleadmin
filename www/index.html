@@ -605,11 +605,12 @@
         </div>
       </div>
     </main>
+    <script src="js/atcommand-utils.js"></script>
     <script src="js/dark-mode.js"></script>
 
     <script>
       function processAllInfos() {
-        return {
+        const defaultDataState = {
           atcmd: "",
           internetConnectionStatus: "Disconnected",
           temperature: "0",
@@ -655,25 +656,74 @@
           nonNrUpload: "0",
           downloadStat: "0",
           uploadStat: "0",
+          intervalId: null,
+        };
 
-          fetchAllInfo() {
+        return {
+          ...defaultDataState,
+
+          resetData(overrides = {}) {
+            const preservedState = {
+              refreshRate: this.refreshRate,
+              newRefreshRate: this.newRefreshRate,
+              intervalId: this.intervalId,
+            };
+
+            Object.assign(
+              this,
+              {
+                ...defaultDataState,
+                ...preservedState,
+                lastUpdate: new Date().toLocaleString(),
+              },
+              overrides
+            );
+          },
+
+          applyFallback(message) {
+            const fallbackMessage = message
+              ? `Unavailable (${message})`
+              : defaultDataState.activeSim;
+
+            this.resetData({
+              activeSim: fallbackMessage,
+              signalAssessment: "Unknown",
+              internetConnectionStatus: "Disconnected",
+            });
+          },
+
+          async fetchAllInfo() {
             this.atcmd =
               'AT^TEMP?;^SWITCH_SLOT?;+CGPIAF=1,1,1,1;^DEBUG?;+CPIN?;+CGCONTRDP=1;$QCSIMSTAT?;+CSQ;';
 
-            fetch(
-              "/cgi-bin/get_atcommand?" +
-                new URLSearchParams({
-                  atcmd: this.atcmd,
-                })
-            ).then((response) => {
-              response.text().then((data) => {
-                // content here
-                if (data.includes("ERROR")) {
-                  console.log("Error fetching data");
-                  this.activeSim = "Something went wrong.";
-                  return;
-                } else {
-                  const rawdata = data;
+            try {
+              const result = await ATCommandService.execute(this.atcmd, {
+                retries: 3,
+                timeout: 15000,
+              });
+
+              if (!result.ok) {
+                const fallbackMessage = result.error
+                  ? result.error.message
+                  : 'Risposta AT non valida.';
+
+                this.applyFallback(fallbackMessage);
+                return;
+              }
+
+              const rawdata = result.data;
+
+              if (!rawdata || !rawdata.trim()) {
+                this.applyFallback('Risposta AT vuota dal modem.');
+                return;
+              }
+
+              if (rawdata.includes('ERROR')) {
+                this.applyFallback('Il modem ha restituito un errore.');
+                return;
+              }
+
+              try {
                   const lines = rawdata.split("\n");
 
                   console.log(lines);
@@ -1344,10 +1394,17 @@
                   } else {
                     this.signalAssessment = "No Signal";
                   }
-                }
-              });
-            });
+                this.lastUpdate = new Date().toLocaleString();
+              } catch (parseError) {
+                console.error("Errore durante il parsing della risposta AT", parseError);
+                this.applyFallback('Errore nel parsing della risposta AT.');
+              }
+            } catch (error) {
+              console.error("Errore durante l'esecuzione del comando AT", error);
+              this.applyFallback(error.message || 'Errore sconosciuto durante la richiesta AT.');
+            }
           },
+
 
           bytesToSize(bytes) {
             const sizes = ["Bytes", "KB", "MB", "GB", "TB"];

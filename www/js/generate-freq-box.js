@@ -1,12 +1,9 @@
-const freqNumbersContainer = document.getElementById(
-    "freqNumbersContainer"
-  );
-
 function generateFreqNumberInputs(num) {
-    let html = "";
-    const maxFields = Math.min(num, 10); // Limit to a maximum of 10 fields
-    for (let i = 1; i <= maxFields; i++) {
-      html += `
+  const safeNum = Number.isFinite(num) ? num : 0;
+  let html = "";
+  const maxFields = Math.min(Math.max(safeNum, 0), 10); // Limit to a maximum of 10 fields
+  for (let i = 1; i <= maxFields; i++) {
+    html += `
     <div class="input-group mb-3" x-show="cellNum >= ${i} && networkModeCell == 'LTE'">
       <input
         type="text"
@@ -24,14 +21,30 @@ function generateFreqNumberInputs(num) {
       />
     </div>
   `;
-    }
-    return html;
+  }
+  return html;
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  const freqNumbersContainer = document.getElementById("freqNumbersContainer");
+  const cellNumInput = document.querySelector("[aria-label='NumCells']");
+
+  if (!freqNumbersContainer || !cellNumInput) {
+    console.warn(
+      "Impossibile inizializzare i campi delle frequenze: elementi richiesti mancanti."
+    );
+    return;
   }
 
-  document.addEventListener("DOMContentLoaded", function () {
-    const cellNumInput = document.querySelector("[aria-label='NumCells']");
-    cellNumInput.addEventListener("input", function () {
-      const cellNum = parseInt(this.value);
-      freqNumbersContainer.innerHTML = generateFreqNumberInputs(cellNum);
-    });
+  const renderInputs = (value) => {
+    const numericValue = Number.parseInt(value, 10);
+    freqNumbersContainer.innerHTML = generateFreqNumberInputs(numericValue);
+  };
+
+  cellNumInput.addEventListener("input", function () {
+    renderInputs(this.value);
   });
+
+  // Render initial state based on any pre-filled value
+  renderInputs(cellNumInput.value);
+});
