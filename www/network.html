@@ -155,6 +155,7 @@
                         id="APN"
                         x-model="newApn"
                         aria-describedby="APN"
+                        maxlength="63"
                         x-bind:placeholder="apn === '-' ? 'Fetching...' : apn"
                       />
                     </div>
@@ -170,13 +171,12 @@
                         aria-label="ipForAPN"
                       >
                         <option
+                          value=""
                           selected
                           x-text="apnIP === '-' ? 'Fetching...' : 'Current: ' + apnIP"
                         ></option>
                         <option value="1">IPv4 Only</option>
-                        <option value="2">IPv6 Only</option>
                         <option value="3">IPv4v6</option>
-                        <option value="4">P2P Protocol</option>
                       </select>
                     </div>
 
@@ -217,7 +217,7 @@
 
                   <div class="col">
                     <div class="mb-4">
-                      <label for="nrModeControl" class="form-label"
+                      <label for="prefNetworkMode" class="form-label"
                         >Select Preferred Network</label
                       >
                       <select
@@ -227,6 +227,7 @@
                         aria-label="prefNetworkMode"
                       >
                         <option
+                          value=""
                           selected
                           x-text="prefNetwork === '-' ? 'Fetching...' : 'Current: ' + prefNetwork"
                         ></option>
@@ -234,25 +235,6 @@
                         <option value="2">LTE Only</option>
                         <option value="6">NR5G-NSA</option>
                         <option value="4">NR5G-SA</option>
-                      </select>
-                    </div>
-                    <div class="mb-4">
-                      <label for="prefNetwork" class="form-label"
-                        >NR5G Mode Control</label
-                      >
-                      <select
-                        class="form-select"
-                        id="nrModeControl"
-                        x-model="nrModeControl"
-                        aria-label="nrModeControl"
-                      >
-                        <option
-                          selected
-                          x-text="nrModeControl === '-' ? 'Fetching...' : 'Current: ' + nrModeControl"
-                        ></option>
-                        <option value="0">Enable All</option>
-                        <option value="2">Disable NR5G-NSA</option>
-                        <option value="1">Disable NR5G-SA</option>
                       </select>
                     </div>
                   </div>
@@ -470,7 +452,6 @@
           newApn: null,
           prefNetwork: "-",
           prefNetworkMode: null,
-          nrModeControl: "-",
           cellNum: null,
           lte_bands: "",
           nsa_bands: "",
@@ -488,6 +469,37 @@
           rawdata: "",
           networkModeListenerAttached: false,
           providerBandsListenerAttached: false,
+          sanitizeApn(apn) {
+            if (typeof apn !== "string") {
+              return "";
+            }
+            return apn.trim();
+          },
+          isValidApn(apn) {
+            return /^[a-zA-Z0-9._-]{1,63}$/.test(apn);
+          },
+          mapApnTypeLabelToValue(label) {
+            const normalized = (label || "")
+              .toString()
+              .trim()
+              .toUpperCase();
+            const mapping = {
+              IPV4: "1",
+              IPV6: "2",
+              IPV4V6: "3",
+              PPP: "4",
+            };
+            return mapping[normalized] || null;
+          },
+          mapApnTypeValueToCommand(value) {
+            const mapping = {
+              "1": "IPV4",
+              "2": "IPV6",
+              "3": "IPV4V6",
+              "4": "PPP",
+            };
+            return mapping[value] || null;
+          },
 
           async getSupportedBands() {
             // Load the checkbox state from localStorage
@@ -756,7 +768,6 @@
               this.apnIP = settings.apnIP;
               this.cellLockStatus = settings.cellLockStatus;
               this.prefNetwork = settings.prefNetwork;
-              this.nrModeControl = settings.nrModeControl;
               this.bands = settings.bands;
             } catch (error) {
               this.lastErrorMessage = error.message || 'Errore nel parsing delle impostazioni correnti.';
@@ -856,70 +867,147 @@
             }, 1000);
           },
           async saveChanges() {
-            const newApn = this.newApn;
-            const newSim = this.newSim;
-            const prefNetworkMode = this.prefNetworkMode;
-            const nrModeControl = this.nrModeControl;
+            const commandParts = [];
+            const hasApnInput = typeof this.newApn === "string";
+            const sanitizedNewApn = hasApnInput
+              ? this.sanitizeApn(this.newApn)
+              : "";
 
-            let atAPN, atSIM, ATNetwork, ATNRMode, atcmd;
-            atAPN = "";
-            atSIM = "";
-            ATNetwork = "";
-            ATNRMode = "";
-            if (newApn !== null) {
-              if (this.newApnIP === "1") {
-                atAPN = `+CGDCONT=1,"IPV4","${newApn}";`;
-              } else if (this.newApnIP === "2") {
-                atAPN = `+CGDCONT=1,"IPV6","${newApn}";`;
-              } else if (this.newApnIP === "3") {
-                atAPN = `+CGDCONT=1,"IPV4V6","${newApn}";`;
-              } else if (this.newApnIP === "4") {
-                atAPN = `+CGDCONT=1,"PPP","${newApn}";`;
-              } else {
-                atAPN = `+CGDCONT=1,"IPV4V6","${newApn}";`;
+            if (hasApnInput) {
+              this.newApn = sanitizedNewApn;
+            }
+
+            const selectedApnTypeRaw = this.newApnIP;
+            const selectedApnType =
+              selectedApnTypeRaw === null || selectedApnTypeRaw === undefined || selectedApnTypeRaw === ""
+                ? null
+                : selectedApnTypeRaw;
+
+            const currentApnSanitized = this.sanitizeApn(this.apn);
+            const hasCurrentApn =
+              currentApnSanitized.length > 0 &&
+              this.apn !== "-" &&
+              this.apn !== "Failed fetching APN";
+
+            let targetApn = null;
+            let targetApnType = null;
+
+            if (hasApnInput) {
+              if (sanitizedNewApn.length === 0) {
+                alert("L'APN non può essere vuoto.");
+                return;
               }
-            }
-            if (newSim !== null) {
-              atSIM = `^SWITCH_SLOT=${newSim};`;
-            }
 
-            if (prefNetworkMode !== null) {
-              ATNetwork = `^SLMODE=1,${prefNetworkMode};`;
-            }
-            if (nrModeControl !== this.nrModeControl) {
-              ATNRMode = `+QNWPREFCFG="nr5g_disable_mode",${nrModeControl}`;
-            }
-
-            atcmd = `AT${atAPN}${atSIM}${ATNetwork}${ATNRMode}`;
-            // If there is double + (++), remove 1 + from the command
-            atcmd = atcmd.replace("+^", "^");
-            if (atcmd !== "AT+") {
-              this.showModal = true;
-
-              const result = await this.sendATcommand(atcmd);
-
-              if (!result.ok) {
-                this.showModal = false;
+              if (!this.isValidApn(sanitizedNewApn)) {
                 alert(
-                  this.lastErrorMessage ||
-                    "Impossibile salvare le modifiche di rete."
+                  "L'APN può contenere solo lettere, numeri, punti, trattini e underscore (max 63 caratteri)."
                 );
                 return;
               }
-              // Do a 15 second countdown
-              this.countdown = 15;
 
-              const interval = setInterval(() => {
-                this.countdown--;
-                if (this.countdown === 0) {
-                  clearInterval(interval);
-                  this.showModal = false;
-                  this.init();
-                }
-              }, 1000);
-            } else {
-              alert("No changes made");
+              targetApn = sanitizedNewApn;
             }
+
+            if (selectedApnType !== null) {
+              if (!["1", "3"].includes(selectedApnType)) {
+                alert("Seleziona un tipo PDP valido.");
+                return;
+              }
+
+              targetApnType = selectedApnType;
+            }
+
+            if (targetApn !== null && targetApnType === null) {
+              const currentType = this.mapApnTypeLabelToValue(this.apnIP);
+              targetApnType = currentType || "3";
+            }
+
+            if (targetApn === null && targetApnType !== null) {
+              if (!hasCurrentApn) {
+                alert(
+                  "Impossibile cambiare il tipo PDP perché l'APN corrente non è disponibile."
+                );
+                return;
+              }
+
+              if (!this.isValidApn(currentApnSanitized)) {
+                alert(
+                  "Impossibile cambiare il tipo PDP perché l'APN corrente non è valido."
+                );
+                return;
+              }
+
+              targetApn = currentApnSanitized;
+            }
+
+            if (targetApn !== null) {
+              if (targetApnType === null) {
+                const currentType = this.mapApnTypeLabelToValue(this.apnIP);
+
+                if (!currentType) {
+                  alert(
+                    "Impossibile determinare il tipo PDP corrente. Seleziona un nuovo valore."
+                  );
+                  return;
+                }
+
+                targetApnType = currentType;
+              }
+
+              const typeLabel = this.mapApnTypeValueToCommand(targetApnType);
+
+              if (!typeLabel) {
+                alert(
+                  "Impossibile costruire il comando APN a causa di un tipo PDP non valido."
+                );
+                return;
+              }
+
+              commandParts.push(`+CGDCONT=1,"${typeLabel}","${targetApn}";`);
+            }
+
+            if (this.newSim === "0" || this.newSim === "1") {
+              commandParts.push(`^SWITCH_SLOT=${this.newSim};`);
+            }
+
+            if (
+              this.prefNetworkMode !== null &&
+              this.prefNetworkMode !== undefined &&
+              this.prefNetworkMode !== ""
+            ) {
+              commandParts.push(`^SLMODE=1,${this.prefNetworkMode};`);
+            }
+
+            if (commandParts.length === 0) {
+              alert("No changes made");
+              return;
+            }
+
+            const atcmd = `AT${commandParts.join("")}`.replace("+^", "^");
+
+            this.showModal = true;
+
+            const result = await this.sendATcommand(atcmd);
+
+            if (!result.ok) {
+              this.showModal = false;
+              alert(
+                this.lastErrorMessage ||
+                  "Impossibile salvare le modifiche di rete."
+              );
+              return;
+            }
+            // Do a 15 second countdown
+            this.countdown = 15;
+
+            const interval = setInterval(() => {
+              this.countdown--;
+              if (this.countdown === 0) {
+                clearInterval(interval);
+                this.showModal = false;
+                this.init();
+              }
+            }, 1000);
           },
           async cellLockEnableLTE() {
             const cellNum = this.cellNum;
