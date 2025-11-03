@@ -469,6 +469,59 @@
           rawdata: "",
           networkModeListenerAttached: false,
           providerBandsListenerAttached: false,
+          async ensurePrimaryApnProfile() {
+            const response = await this.sendATcommand('AT+CGDCONT?');
+
+            if (!response.ok || !response.data) {
+              return {
+                ok: false,
+                message:
+                  this.lastErrorMessage ||
+                  "Impossibile leggere i profili APN correnti.",
+              };
+            }
+
+            const contexts = response.data
+              .split("\n")
+              .map((line) => line.trim())
+              .filter((line) => line.startsWith("+CGDCONT:"))
+              .map((line) => {
+                const match = line.match(
+                  /\+CGDCONT:\s*(\d+),\"([^\"]*)\",\"([^\"]*)\"/i
+                );
+
+                if (!match) {
+                  return null;
+                }
+
+                return {
+                  cid: parseInt(match[1], 10),
+                  type: match[2],
+                  apn: match[3],
+                };
+              })
+              .filter(Boolean)
+              .sort((a, b) => a.cid - b.cid);
+
+            const contextsToDelete = contexts.filter((ctx) => ctx.cid !== 1);
+
+            for (const ctx of contextsToDelete) {
+              const deleteResult = await this.sendATcommand(
+                `AT+CGDCONT=${ctx.cid}`
+              );
+
+              if (!deleteResult.ok) {
+                return {
+                  ok: false,
+                  message:
+                    this.lastErrorMessage ||
+                    `Impossibile rimuovere il profilo APN ${ctx.cid}.`,
+                };
+              }
+            }
+
+            return { ok: true };
+          },
           sanitizeApn(apn) {
             if (typeof apn !== "string") {
               return "";
@@ -867,7 +920,7 @@
             }, 1000);
           },
           async saveChanges() {
-            const commandParts = [];
+            const commandsToRun = [];
             const hasApnInput = typeof this.newApn === "string";
             const sanitizedNewApn = hasApnInput
               ? this.sanitizeApn(this.newApn)
@@ -879,7 +932,9 @@
 
             const selectedApnTypeRaw = this.newApnIP;
             const selectedApnType =
-              selectedApnTypeRaw === null || selectedApnTypeRaw === undefined || selectedApnTypeRaw === ""
+              selectedApnTypeRaw === null ||
+              selectedApnTypeRaw === undefined ||
+              selectedApnTypeRaw === ""
                 ? null
                 : selectedApnTypeRaw;
 
@@ -909,12 +964,12 @@
             }
 
             if (selectedApnType !== null) {
-              if (!["1", "3"].includes(selectedApnType)) {
+              if (["1", "3"].includes(selectedApnType)) {
+                targetApnType = selectedApnType;
+              } else {
                 alert("Seleziona un tipo PDP valido.");
                 return;
               }
-
-              targetApnType = selectedApnType;
             }
 
             if (targetApn !== null && targetApnType === null) {
@@ -963,11 +1018,17 @@
                 return;
               }
 
-              commandParts.push(`+CGDCONT=1,"${typeLabel}","${targetApn}";`);
+              commandsToRun.push({
+                command: `AT+CGDCONT=1,"${typeLabel}","${targetApn}"`,
+                errorMessage: "Impossibile configurare l'APN.",
+              });
             }
 
             if (this.newSim === "0" || this.newSim === "1") {
-              commandParts.push(`^SWITCH_SLOT=${this.newSim};`);
+              commandsToRun.push({
+                command: `AT^SWITCH_SLOT=${this.newSim}`,
+                errorMessage: "Impossibile cambiare SIM.",
+              });
             }
 
             if (
@@ -975,36 +1036,85 @@
               this.prefNetworkMode !== undefined &&
               this.prefNetworkMode !== ""
             ) {
-              commandParts.push(`^SLMODE=1,${this.prefNetworkMode};`);
+              commandsToRun.push({
+                command: `AT^SLMODE=1,${this.prefNetworkMode}`,
+                errorMessage: "Impossibile salvare la rete preferita.",
+              });
             }
 
-            if (commandParts.length === 0) {
+            if (commandsToRun.length === 0) {
               alert("No changes made");
               return;
             }
 
-            const atcmd = `AT${commandParts.join("")}`.replace("+^", "^");
+            const requiresBasebandRestart = commandsToRun.some((step) =>
+              step.command.startsWith("AT+CGDCONT=1")
+            );
 
             this.showModal = true;
 
-            const result = await this.sendATcommand(atcmd);
+            if (requiresBasebandRestart) {
+              const cleanupResult = await this.ensurePrimaryApnProfile();
 
-            if (!result.ok) {
-              this.showModal = false;
-              alert(
-                this.lastErrorMessage ||
-                  "Impossibile salvare le modifiche di rete."
-              );
-              return;
+              if (!cleanupResult.ok) {
+                this.showModal = false;
+                alert(
+                  cleanupResult.message ||
+                    "Impossibile preparare i profili APN."
+                );
+                return;
+              }
             }
-            // Do a 15 second countdown
-            this.countdown = 15;
+
+            for (const step of commandsToRun) {
+              const result = await this.sendATcommand(step.command);
+
+              if (!result.ok) {
+                this.showModal = false;
+                alert(
+                  this.lastErrorMessage ||
+                    step.errorMessage ||
+                    "Impossibile eseguire il comando richiesto."
+                );
+                return;
+              }
+            }
+
+            if (requiresBasebandRestart) {
+              const radioOff = await this.sendATcommand("AT+CFUN=0");
+
+              if (!radioOff.ok) {
+                this.showModal = false;
+                alert(
+                  this.lastErrorMessage ||
+                    "Errore nello spegnimento della baseband."
+                );
+                return;
+              }
+
+              const radioOn = await this.sendATcommand("AT+CFUN=1");
+
+              if (!radioOn.ok) {
+                this.showModal = false;
+                alert(
+                  this.lastErrorMessage ||
+                    "Errore nella riaccensione della baseband."
+                );
+                return;
+              }
+            }
+
+            this.countdown = requiresBasebandRestart ? 30 : 15;
 
             const interval = setInterval(() => {
               this.countdown--;
               if (this.countdown === 0) {
                 clearInterval(interval);
                 this.showModal = false;
+                this.newApn = null;
+                this.newApnIP = null;
+                this.prefNetworkMode = null;
+                this.newSim = null;
                 this.init();
               }
             }, 1000);

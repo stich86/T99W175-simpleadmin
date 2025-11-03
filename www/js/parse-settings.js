@@ -10,16 +10,37 @@ function parseCurrentSettings(rawdata) {
     sim = simLine.split(" ")[0].replace(/\D/g, "");
   }
 
+  const findFirstProfileLine = (entries, prefix) => {
+    const normalizedPrefix = `+${prefix.toUpperCase()}`;
+    const primaryLine = entries.find((line) =>
+      line.trim().toUpperCase().startsWith(`${normalizedPrefix}: 1`)
+    );
+
+    if (primaryLine) {
+      return primaryLine;
+    }
+
+    return entries.find((line) =>
+      line.trim().toUpperCase().startsWith(`${normalizedPrefix}:`)
+    );
+  };
+
   let apn = "Failed fetching APN";
-  const apnLine = lines.find((line) => line.includes("+CGCONTRDP: 1"));
+  const apnLine = findFirstProfileLine(lines, "CGCONTRDP");
   if (apnLine) {
-    apn = apnLine.split(",")[2].replace(/\"/g, "");
+    const parts = apnLine.split(",");
+    if (parts.length >= 3) {
+      apn = parts[2].replace(/\"/g, "").trim();
+    }
   }
 
   let apnIP = "-";
-  const apnIpLine = lines.find((line) => line.includes("+CGDCONT: 1"));
+  const apnIpLine = findFirstProfileLine(lines, "CGDCONT");
   if (apnIpLine) {
-    apnIP = apnIpLine.split(",")[1].replace(/\"/g, "");
+    const parts = apnIpLine.split(",");
+    if (parts.length >= 2) {
+      apnIP = parts[1].replace(/\"/g, "").trim();
+    }
   }
 
   let cellLock4GStatus = "0";
