@@ -4,9 +4,33 @@ import os
 import re
 import sys
 import urllib.parse
+from pathlib import Path
 from typing import Dict, List, Optional
 
-CONFIG_FILE = "/etc/data/mobileap_cfg.xml"
+
+DEFAULT_CONFIG_PATH = Path("/etc/data/mobileap_cfg.xml")
+
+
+def resolve_config_path() -> Path:
+    override = os.environ.get("MOBILEAP_CONFIG_PATH")
+    if override:
+        return Path(override).expanduser()
+
+    script_path = Path(__file__).resolve()
+    repo_root = script_path.parents[2]
+    fallback_candidates = [
+        DEFAULT_CONFIG_PATH,
+        repo_root / "Default config files" / "mobileap_cfg.xml",
+    ]
+
+    for candidate in fallback_candidates:
+        if candidate.exists():
+            return candidate
+
+    return DEFAULT_CONFIG_PATH
+
+
+CONFIG_PATH = resolve_config_path()
 
 
 def print_headers() -> None:
@@ -27,7 +51,7 @@ def respond(success: bool, message: str, *, data: Optional[Dict] = None, errors:
 
 def load_configuration() -> str:
     try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as handle:
+        with CONFIG_PATH.open("r", encoding="utf-8") as handle:
             return handle.read()
     except OSError:
         respond(False, "Configuration file not found.")
@@ -36,7 +60,8 @@ def load_configuration() -> str:
 
 def save_configuration(content: str) -> bool:
     try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as handle:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with CONFIG_PATH.open("w", encoding="utf-8") as handle:
             handle.write(content)
         return True
     except OSError:
@@ -44,7 +69,7 @@ def save_configuration(content: str) -> bool:
 
 
 def read_xml_value(content: str, tag: str) -> str:
-    pattern = re.compile(rf"<{tag}>\\s*([^<]*)\\s*</{tag}>", re.IGNORECASE)
+    pattern = re.compile(rf"<{tag}>\s*([^<]*)\s*</{tag}>", re.IGNORECASE)
     match = pattern.search(content)
     if not match:
         return ""
@@ -52,8 +77,8 @@ def read_xml_value(content: str, tag: str) -> str:
 
 
 def update_xml_value(content: str, tag: str, value: str) -> str:
-    pattern = re.compile(rf"(<{tag}>\\s*)([^<]*)(\\s*</{tag}>)", re.IGNORECASE)
-    replacement, count = pattern.subn(rf"\\1{value}\\3", content, count=1)
+    pattern = re.compile(rf"(<{tag}>\s*)([^<]*)(\s*</{tag}>)", re.IGNORECASE)
+    replacement, count = pattern.subn(rf"\g<1>{value}\g<3>", content, count=1)
     if count == 0:
         raise ValueError(f"Missing XML element: {tag}")
     return replacement
@@ -89,7 +114,7 @@ def parse_params() -> Dict[str, str]:
 
 
 def is_valid_ip(value: str) -> bool:
-    pattern = re.compile(r"^(25[0-5]|2[0-4]\\d|1?\\d?\\d)(\\.(25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}$")
+    pattern = re.compile(r"^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$")
     return bool(pattern.match(value))
 
 
