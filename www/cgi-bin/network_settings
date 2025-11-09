@@ -240,6 +240,7 @@ DHCP_END=""
 DHCP_LEASE=""
 DMZ_ENABLED="0"
 DMZ_IP=""
+IPV6_ENABLED="1"
 
 apply_params() {
     local input="$1"
@@ -282,6 +283,9 @@ apply_params() {
                 ;;
             dmz_ip)
                 DMZ_IP="$value"
+                ;;
+            ipv6_enabled)
+                IPV6_ENABLED="$value"
                 ;;
         esac
     done
@@ -334,7 +338,7 @@ handle_get() {
         respond false "Configuration file not found at $CONFIG_FILE."
     fi
 
-    local ip mask dhcp_enable dhcp_start dhcp_end dhcp_lease dmz_ip
+    local ip mask dhcp_enable dhcp_start dhcp_end dhcp_lease dmz_ip ipv6_enable
     ip=$(get_xml_value "APIPAddr" "$CONFIG_FILE")
     mask=$(get_xml_value "SubNetMask" "$CONFIG_FILE")
     dhcp_enable=$(get_xml_value "EnableDHCPServer" "$CONFIG_FILE")
@@ -346,6 +350,7 @@ handle_get() {
         dmz_ip=$(get_xml_value "DmzIP" "$CONFIG_FILE")
     fi
     dmz_ip=$(printf '%s' "$dmz_ip" | strip_comments | tr -d '\r' | trim)
+    ipv6_enable=$(get_xml_value "EnableIPV6" "$CONFIG_FILE")
 
     local dhcp_flag="false"
     if [ "$dhcp_enable" = "1" ]; then
@@ -359,8 +364,13 @@ handle_get() {
         dmz_value="$dmz_ip"
     fi
 
+    local ipv6_flag="false"
+    if [ "$ipv6_enable" = "1" ]; then
+        ipv6_flag="true"
+    fi
+
     local data
-    data=$(printf '{"ipAddress":"%s","subnetMask":"%s","dhcpEnabled":%s,"dhcpStart":"%s","dhcpEnd":"%s","dhcpLease":"%s","dmzEnabled":%s,"dmzIp":"%s"}' \
+    data=$(printf '{"ipAddress":"%s","subnetMask":"%s","dhcpEnabled":%s,"dhcpStart":"%s","dhcpEnd":"%s","dhcpLease":"%s","dmzEnabled":%s,"dmzIp":"%s","ipv6Enabled":%s}' \
         "$(json_escape "$ip")" \
         "$(json_escape "$mask")" \
         "$dhcp_flag" \
@@ -368,7 +378,8 @@ handle_get() {
         "$(json_escape "$dhcp_end")" \
         "$(json_escape "$dhcp_lease")" \
         "$dmz_flag" \
-        "$(json_escape "$dmz_value")")
+        "$(json_escape "$dmz_value")" \
+        "$ipv6_flag")
 
     respond true "Network configuration loaded." "$data"
 }
@@ -388,6 +399,7 @@ handle_update() {
     local dhcp_lease="${DHCP_LEASE// /}"
     local dmz_flag="${DMZ_ENABLED:-0}"
     local dmz_ip="${DMZ_IP// /}"
+    local ipv6_flag="${IPV6_ENABLED:-1}"
 
     if [ -z "$ip" ] || ! is_valid_ip "$ip"; then
         add_error "Invalid LAN IP address provided."
@@ -452,6 +464,10 @@ handle_update() {
         dmz_ip="0.0.0.0"
     fi
 
+    if [ "$ipv6_flag" != "0" ] && [ "$ipv6_flag" != "1" ]; then
+        add_error "Invalid IPv6 status provided."
+    fi
+
     if [ ${#errors[@]} -gt 0 ]; then
         local errors_json
         errors_json=$(errors_to_json)
@@ -484,6 +500,10 @@ handle_update() {
 
     if ! set_scoped_xml_value "MobileAPNatCfg" "DmzIP" "$dmz_ip" "$CONFIG_FILE"; then
         respond false "Missing XML element: DmzIP"
+    fi
+
+    if ! set_xml_value "EnableIPV6" "$ipv6_flag" "$CONFIG_FILE"; then
+        respond false "Missing XML element: EnableIPV6"
     fi
 
     respond true "Network configuration updated successfully."
