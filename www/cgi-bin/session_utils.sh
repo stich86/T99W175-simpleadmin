@@ -2,9 +2,30 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+DEFAULT_CONFIG_FILE="$SCRIPT_DIR/../../config/simpleadmin.conf"
+if [ -n "${SIMPLEADMIN_CONFIG_FILE:-}" ]; then
+    CONFIG_FILE="$SIMPLEADMIN_CONFIG_FILE"
+elif [ -f "$DEFAULT_CONFIG_FILE" ]; then
+    CONFIG_FILE="$DEFAULT_CONFIG_FILE"
+else
+    CONFIG_FILE="$SCRIPT_DIR/simpleadmin.conf"
+fi
+
+if [ -f "$CONFIG_FILE" ]; then
+    # shellcheck source=/dev/null
+    . "$CONFIG_FILE"
+fi
+
+SIMPLEADMIN_ENABLE_LOGIN="${SIMPLEADMIN_ENABLE_LOGIN:-1}"
+
 CREDENTIALS_FILE="${SIMPLEADMIN_CREDENTIALS_FILE:-$SCRIPT_DIR/credentials.txt}"
 SESSION_STORE="${SIMPLEADMIN_SESSION_STORE:-/tmp/simpleadmin_sessions.txt}"
 SESSION_TTL="${SIMPLEADMIN_SESSION_TTL:-43200}"
+
+login_is_disabled() {
+    [ "$SIMPLEADMIN_ENABLE_LOGIN" = "0" ]
+}
 
 status_text() {
     case "$1" in
@@ -62,6 +83,9 @@ current_timestamp() {
 }
 
 ensure_credentials_file() {
+    if login_is_disabled; then
+        return 0
+    fi
     if [ ! -f "$CREDENTIALS_FILE" ]; then
         mkdir -p "$(dirname "$CREDENTIALS_FILE")"
         local default_hash
@@ -71,6 +95,9 @@ ensure_credentials_file() {
 }
 
 ensure_session_store() {
+    if login_is_disabled; then
+        return 0
+    fi
     if [ ! -f "$SESSION_STORE" ]; then
         mkdir -p "$(dirname "$SESSION_STORE")"
         : > "$SESSION_STORE"
@@ -91,6 +118,9 @@ cleanup_sessions_locked() {
 }
 
 cleanup_sessions() {
+    if login_is_disabled; then
+        return 0
+    fi
     ensure_session_store
     {
         flock -x 200
@@ -204,6 +234,13 @@ extract_token_from_cookie() {
 }
 
 session_load() {
+    if login_is_disabled; then
+        SESSION_TOKEN=""
+        SESSION_USERNAME="admin"
+        SESSION_ROLE="admin"
+        SESSION_EXPIRY=""
+        return 0
+    fi
     local token
     token="$(extract_token_from_cookie)"
     if [ -z "$token" ]; then
@@ -217,6 +254,9 @@ session_load() {
 
 session_require_role() {
     local expected_role="$1"
+    if login_is_disabled; then
+        return 0
+    fi
     if [ "${SESSION_ROLE:-}" = "$expected_role" ]; then
         return 0
     fi
@@ -224,6 +264,9 @@ session_require_role() {
 }
 
 invalidate_session() {
+    if login_is_disabled; then
+        return 0
+    fi
     local token="$1"
     ensure_session_store
     if [ -z "$token" ]; then
