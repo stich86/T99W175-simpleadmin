@@ -20,6 +20,8 @@ Check [DOCUMENTAZIONE.md](DOCUMENTAZIONE.md) for file-by-file behavior, request 
 
 Simpleadmin is designed to run directly on the Foxconn T99W175 inside the modem’s web partition.
 Follow these steps to deploy it safely.
+
+
 1 Download or clone the repository
 
 2 Extract the ZIP and locate the www folder
