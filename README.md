@@ -15,3 +15,9 @@ Static web interface (HTML/JS with Bash CGI helpers) to administer Foxconn T99W1
 - Front-end settings via `www/config/simpleadmin.conf`.
 
 Check [DOCUMENTAZIONE.md](DOCUMENTAZIONE.md) for file-by-file behavior, request flows, and how each page uses the CGI helpers.
+
+## 💬 Questions, Support & Requests
+
+For any questions, feature requests or support, feel free to reach out on Telegram:
+
+👉 [Telegram Group](https://t.me/ltesperimentazioni)
