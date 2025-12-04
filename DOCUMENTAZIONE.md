@@ -25,10 +25,6 @@
 - Purpose: band locking, cell locking, and quick network utilities.
 - How: `cellLocking()` fetches allowed bands with `AT^BAND_PREF_EXT?`, then `populateCheckboxes()` draws dynamic checkboxes per RAT (LTE/NSA/SA) and preselects locked bands. The page lets you lock PCI/EARFCN combos, run pings, toggle TTL override, trigger resets, and shows confirmation modals before applying changes.
 
-### `www/scanner.html` — Cell scanner
-- Purpose: scan LTE/NR cells and label operators by MCC/MNC.
-- How: `startCellScan()`/`parseCellScan()` orchestrate sequential AT scans, disable controls during execution, decode MCC/MNC via a local dictionary, and fill a results table (PCI, EARFCN, RSRP/RSRQ, signal level). Supports Full/LTE/NR5G modes and formats raw replies for readability.
-
 ### `www/settings.html` — Advanced utilities
 - Purpose: consolidated hub for terminal access and maintenance tasks.
 - How: the `simpleSettings()` component offers:
