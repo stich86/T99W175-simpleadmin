@@ -1,15 +1,15 @@
 # Complete documentation for "Simple T99"
 
 ## Introduction
-"Simple T99" is a static administration interface for Quectel T99W175 modems/routers. Bootstrap 5 and Alpine.js power the UI, while Bash CGI scripts execute AT commands, read/write configuration, and expose quick utilities (Watchcat, TTL override, SMS). Everything is meant to live on the modem web partition and run through the built-in HTTP server.
+"Simple T99" is a static administration interface for Foxcon T99W175 modems. Bootstrap 5 and Alpine.js power the UI, while Bash CGI scripts execute AT commands, read/write configuration, and expose quick utilities (Watchcat, TTL override, SMS). Everything is meant to live on the modem web partition and run through the built-in HTTP server.
 
 ## Repository layout
 - `README.md`: quick overview and credits.
 - `DOCUMENTAZIONE.md`: this detailed walkthrough.
-- `Default config files/`: XML baselines you can push to the modem.
+- `Default config files/`: XML baselines extracted from default modem env.
   - `mobileap_cfg.xml`: LAN IP, DHCP, APN template, and network defaults.
   - `mobileap_firewall.xml`: default firewall ruleset.
-- `modem_config`: interactive Bash CLI that mirrors most UI features (APN, band/cell lock, TTL, roaming, LAN IP, bridge mode, reboot, etc.).
+- `modem_config`: interactive Bash CLI that mirrors most UI features (APN, band/cell lock, TTL, roaming, LAN IP, bridge mode, reboot, etc.)all credits to [stich86](https://github.com/stich86).
 - `www/`: root of the web payload the modem serves.
   - HTML pages (`*.html`).
   - Static assets (`css/`, `js/`, `fonts/`, `favicon.ico`).
@@ -45,14 +45,6 @@
 ### `www/deviceinfo.html` — Device details
 - Purpose: display identity/network info and let you change the IMEI.
 - How: `fetchDeviceInfo()` issues AT queries (`AT+CGMI`, `AT+CGMM`, `^VERSION?`, `+CIMI`, `+ICCID`, `+CGSN`, `+CNUM`, `+CGCONTRDP`) plus `/cgi-bin/get_lanip` for LAN details. `updateIMEI()` prepares `^NV` strings to write a new IMEI and triggers a reboot countdown so users wait for the modem to return.
-
-### `www/watchcat.html` — Modern Watchcat UI
-- Purpose: configure connectivity watchdog with validation.
-- How: `simpleWatchCat()` pulls current status from `/cgi-bin/get_watchcat_status`, enables the submit toggle only when target, cooldown, failures, and action are filled, and posts the config to `/cgi-bin/watchcat_maker`. User feedback echoes the CGI response to avoid silent failures.
-
-### `www/watchcat_backup.html` — Legacy Watchcat UI
-- Purpose: fallback page that keeps the older layout and simpler bindings.
-- How: mostly static fields with Alpine bindings; users manually submit parameters without the guarded validations present in the modern page.
 
 ### `www/config/simpleadmin.conf`
 - Purpose: front-end feature toggle.
