@@ -1017,7 +1017,7 @@
           },
           async getCurrentSettings() {
             const atcmd =
-              'AT^SWITCH_SLOT?;+CGCONTRDP=1;+CGDCONT?;^BAND_PREF_EXT?;^CA_INFO?;^SLMODE?;^NR5G_MODE?';
+              'AT^SWITCH_SLOT?;+CGCONTRDP=1;+CGDCONT?;^BAND_PREF_EXT?;^CA_INFO?;^SLMODE?';
 
             const result = await this.sendATcommand(atcmd);
 
@@ -1046,8 +1046,20 @@
                 settings.prefNetworkValue
               );
               this.bands = settings.bands;
+
+              let nr5gModeValue = settings.nr5gModeValue;
+
+              if (nr5gModeValue === null) {
+                const nr5gResult = await this.sendATcommand('AT^NR5G_MODE?');
+
+                if (nr5gResult.ok && nr5gResult.data) {
+                  const nr5gSettings = parseCurrentSettings(nr5gResult.data);
+                  nr5gModeValue = nr5gSettings?.nr5gModeValue ?? null;
+                }
+              }
+
               if (typeof describeNr5gMode === "function") {
-                this.nr5gMode = describeNr5gMode(settings.nr5gModeValue);
+                this.nr5gMode = describeNr5gMode(nr5gModeValue);
               }
             } catch (error) {
               this.lastErrorMessage = error.message || 'Error while parsing the current settings.';
