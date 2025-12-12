@@ -141,9 +141,16 @@ function esimManager() {
         );
       }
     },
+    sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    },
     async refreshAll() {
       try {
-        await Promise.all([this.loadEid(), this.loadProfiles(), this.loadNotifications()]);
+        await this.loadEid();
+        await this.sleep(500);
+        await this.loadProfiles();
+        await this.sleep(500);
+        await this.loadNotifications();
       } catch (error) {
         console.error(error);
         this.setAlert("danger", "Errore durante l'aggiornamento dei dati eSIM.");
