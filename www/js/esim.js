@@ -267,10 +267,20 @@ document.addEventListener("alpine:init", () => {
       }
       const payload = {
         iccid: this.processForm.iccid,
-        process_all: this.processForm.process_all,
       };
-      const sequence = Number.parseInt(this.processForm.sequence_number, 10);
-      if (!this.processForm.process_all && !Number.isNaN(sequence)) {
+      const processAll = this.processForm.process_all === true;
+      payload.process_all = processAll;
+
+      if (!processAll) {
+        const sequence = Number.parseInt(this.processForm.sequence_number, 10);
+        if (Number.isNaN(sequence)) {
+          this.setAlert(
+            "warning",
+            "Indica il sequence number per processare una notifica specifica."
+          );
+          return;
+        }
+
         payload.sequence_number = sequence;
       }
       try {
@@ -288,15 +298,29 @@ document.addEventListener("alpine:init", () => {
     },
     async removeNotifications() {
       const payload = {};
-      if (this.removeForm.remove_all) {
+      const removeAll = this.removeForm.remove_all === true;
+
+      if (removeAll) {
         payload.remove_all = true;
-      }
-      if (this.removeForm.iccid) {
-        payload.iccid = this.removeForm.iccid;
-      }
-      const sequence = Number.parseInt(this.removeForm.sequence_number, 10);
-      if (!Number.isNaN(sequence)) {
-        payload.sequence_number = sequence;
+      } else {
+        const hasIccid = Boolean(this.removeForm.iccid);
+        const sequence = Number.parseInt(this.removeForm.sequence_number, 10);
+        const hasSequence = !Number.isNaN(sequence);
+
+        if (!hasIccid && !hasSequence) {
+          this.setAlert(
+            "warning",
+            "Specifica un ICCID o un sequence number per rimuovere le notifiche."
+          );
+          return;
+        }
+
+        if (hasIccid) {
+          payload.iccid = this.removeForm.iccid;
+        }
+        if (hasSequence) {
+          payload.sequence_number = sequence;
+        }
       }
       try {
         const response = await this.apiFetch("/notifications/remove", {
