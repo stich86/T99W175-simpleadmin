@@ -1,11 +1,5 @@
-let esimManagerRegistered = false;
-
-function registerEsimManager(alpineInstance) {
-  if (esimManagerRegistered || !alpineInstance?.data) {
-    return;
-  }
-
-  alpineInstance.data("esimManager", () => ({
+function esimManager() {
+  return {
     loading: true,
     enabled: false,
     baseUrl: "",
@@ -42,6 +36,7 @@ function registerEsimManager(alpineInstance) {
       this.loading = true;
       this.clearAlert();
       console.debug("[eSIM] Avvio bootstrap gestione eSIM...");
+
       const config = await EsimConfig.loadConfig();
       this.enabled = config.enabled === 1 || config.enabled === "1" || config.enabled === true;
       this.baseUrl = (config.base_url || "").replace(/\/+$/, "");
@@ -52,6 +47,7 @@ function registerEsimManager(alpineInstance) {
         baseUrl: this.baseUrl,
         fallbackBaseUrl: this.fallbackBaseUrl,
       });
+
       if (!this.enabled) {
         this.setAlert(
           "warning",
@@ -341,15 +337,21 @@ function registerEsimManager(alpineInstance) {
         this.setAlert("danger", `Errore durante la rimozione: ${error.message}`);
       }
     },
-  }));
-
-  esimManagerRegistered = true;
+  };
 }
 
+if (typeof window !== "undefined") {
+  window.esimManager = esimManager;
+}
+
+const registerEsimManager = () => {
+  if (window.Alpine) {
+    window.Alpine.data("esimManager", esimManager);
+  }
+};
+
 if (window.Alpine) {
-  registerEsimManager(window.Alpine);
+  registerEsimManager();
 } else {
-  document.addEventListener("alpine:init", (event) => {
-    registerEsimManager(event.detail);
-  });
+  document.addEventListener("alpine:init", registerEsimManager, { once: true });
 }
