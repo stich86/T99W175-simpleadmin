@@ -9,6 +9,7 @@ function esimManager() {
     notifications: [],
     serverHealthy: null,
     alert: { type: "", message: "" },
+    _bootstrapped: false,
     downloadForm: {
       smdp: "",
       matching_id: "",
@@ -30,17 +31,42 @@ function esimManager() {
       sequence_number: "",
     },
     init() {
+      if (this._bootstrapped) {
+        console.debug("[eSIM] Bootstrap già eseguito, skip.");
+        return;
+      }
       this.bootstrap();
     },
     async bootstrap() {
+      if (this._bootstrapped) {
+        console.debug("[eSIM] Bootstrap già eseguito, skip.");
+        return;
+      }
+      this._bootstrapped = true;
+
       this.loading = true;
       this.clearAlert();
       console.debug("[eSIM] Avvio bootstrap gestione eSIM...");
 
       const config = await EsimConfig.loadConfig();
       this.enabled = config.enabled === 1 || config.enabled === "1" || config.enabled === true;
-      this.baseUrl = (config.base_url || "").replace(/\/+$/, "");
-      this.fallbackBaseUrl = this.computeFallbackBaseUrl(this.baseUrl);
+
+      // Calcola subito il fallback
+      const configBaseUrl = (config.base_url || "").replace(/\/+$/, "");
+      this.fallbackBaseUrl = this.computeFallbackBaseUrl(configBaseUrl);
+
+      // Se l'URL configurato è localhost, usa direttamente il fallback
+      try {
+        const url = new URL(configBaseUrl);
+        if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+          console.debug("[eSIM] Rilevato localhost, utilizzo direttamente il fallback");
+          this.baseUrl = this.fallbackBaseUrl;
+        } else {
+          this.baseUrl = configBaseUrl;
+        }
+      } catch (error) {
+        this.baseUrl = configBaseUrl;
+      }
 
       console.debug("[eSIM] Configurazione caricata", {
         enabled: this.enabled,
@@ -130,24 +156,33 @@ function esimManager() {
     },
     async checkHealth() {
       try {
-        const payload = await this.apiFetch("/health", { cache: "no-store" });
-        this.serverHealthy = payload?.success === true;
+        const payload = await this.apiFetch("/eid", { cache: "no-store" });
+        const eid = payload?.data?.eid;
+    
+        if (eid) {
+          this.serverHealthy = true;
+          this.eid = eid;
+          console.debug("[eSIM] Server online - eSIM OK", eid);
+        } else {
+          this.serverHealthy = false;
+          this.setAlert(
+            "warning",
+            "Server online ma eSIM non disponibile. Verifica il modulo eSIM."
+          );
+          console.debug("[eSIM] Server online - eSIM ERROR");
+        }
       } catch (error) {
         console.error(error);
         this.serverHealthy = false;
         this.setAlert(
           "danger",
-          "Impossibile contattare il server eSIM. Verifica che euicc-client sia in esecuzione."
+          "Server offline. Verifica che euicc-client sia in esecuzione."
         );
+        console.debug("[eSIM] Server OFFLINE");
       }
-    },
-    sleep(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
     },
     async refreshAll() {
       try {
-        await this.loadEid();
-        await this.sleep(500);
         await this.loadProfiles();
         await this.sleep(500);
         await this.loadNotifications();
@@ -155,6 +190,9 @@ function esimManager() {
         console.error(error);
         this.setAlert("danger", "Errore durante l'aggiornamento dei dati eSIM.");
       }
+    },
+    sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
     },
     async loadEid() {
       const payload = await this.apiFetch("/eid", { cache: "no-store" });
@@ -354,6 +392,7 @@ if (typeof window !== "undefined") {
 const registerEsimManager = () => {
   if (window.Alpine) {
     window.Alpine.data("esimManager", esimManager);
+    console.debug("[eSIM] Alpine.data registrato");
   }
 };
 
