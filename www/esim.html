@@ -284,7 +284,14 @@
                     </div>
                     <div class="col-md-4">
                       <label class="form-label" for="removeSequence">Sequence # (opz.)</label>
-                      <input type="number" min="1" class="form-control" id="removeSequence" x-model="removeForm.sequence_number" />
+                      <input
+                        type="number"
+                        min="1"
+                        class="form-control"
+                        id="removeSequence"
+                        x-model="removeForm.sequence_number"
+                        :disabled="removeForm.remove_all"
+                      />
                     </div>
                     <div class="col-12 d-flex justify-content-end">
                       <button class="btn btn-outline-danger" type="submit">Rimuovi</button>
