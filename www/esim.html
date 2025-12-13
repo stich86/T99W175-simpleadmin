@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<DOCTYPE html>
 <html lang="it" data-bs-theme="light">
   <head>
     <meta charset="utf-8" />
@@ -81,32 +81,73 @@
 
         <template x-if="enabled">
           <div class="row mt-4 g-4" x-show="loading === false">
-            <div class="col-lg-4">
-              <div class="card h-100">
-                <div class="card-header">Stato server eSIM</div>
+            <!-- Primo gruppo: Stato server + Download -->
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header">Stato server e Download</div>
                 <div class="card-body">
-                  <p class="mb-2">
-                    <span class="fw-semibold">Endpoint:</span>
-                    <code x-text="baseUrl || 'N/D'"></code>
-                  </p>
-                  <p class="mb-2 d-flex align-items-center gap-2">
-                    <span class="fw-semibold">Salute server:</span>
-                    <span class="badge" :class="serverHealthy ? 'text-bg-success' : 'text-bg-danger'" x-text="serverHealthy ? 'Online' : 'Offline'"></span>
-                  </p>
-                  <div class="mt-3">
-                    <p class="fw-semibold mb-1">EID</p>
-                    <p class="mb-0" x-text="eid || 'Non disponibile'"></p>
-                  </div>
-                  <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-outline-primary btn-sm" type="button" @click="refreshAll">Aggiorna tutto</button>
-                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadEid">Aggiorna EID</button>
+                  <div class="row g-4">
+                    <!-- Colonna Stato -->
+                    <div class="col-lg-4">
+                      <h5 class="fw-semibold mb-3">Stato server eSIM</h5>
+                      <p class="mb-2">
+                        <span class="fw-semibold">Endpoint:</span>
+                        <code x-text="baseUrl || 'N/D'"></code>
+                      </p>
+                      <p class="mb-2 d-flex align-items-center gap-2">
+                        <span class="fw-semibold">Salute server:</span>
+                        <span class="badge" :class="serverHealthy ? 'text-bg-success' : 'text-bg-danger'" x-text="serverHealthy ? 'Online' : 'Offline'"></span>
+                      </p>
+                      <div class="mt-3">
+                        <p class="fw-semibold mb-1">EID</p>
+                        <p class="mb-0 text-break" x-text="eid || 'Non disponibile'"></p>
+                      </div>
+                      <div class="d-flex gap-2 mt-3">
+                        <button class="btn btn-outline-primary btn-sm" type="button" @click="refreshAll">Aggiorna tutto</button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadEid">Aggiorna EID</button>
+                      </div>
+                    </div>
+
+                    <!-- Colonna Download -->
+                    <div class="col-lg-8 border-start">
+                      <h5 class="fw-semibold mb-3">Download nuovo profilo</h5>
+                      <form class="row g-3" @submit.prevent="downloadProfile">
+                        <div class="col-md-6">
+                          <label class="form-label" for="qrUpload">Carica QR code (opzionale)</label>
+                          <input type="file" class="form-control" id="qrUpload" accept="image/*" @change="handleQrUpload($event)" />
+                          <div class="form-text">Compila automaticamente i campi</div>
+                        </div>
+                        <div class="col-md-6">
+                          <label class="form-label" for="smdp">SMDP+</label>
+                          <input type="text" class="form-control" id="smdp" x-model="downloadForm.smdp" placeholder="es. smdp.io" required />
+                        </div>
+                        <div class="col-md-6">
+                          <label class="form-label" for="matchingId">Matching ID</label>
+                          <input type="text" class="form-control" id="matchingId" x-model="downloadForm.matching_id" required />
+                        </div>
+                        <div class="col-md-6">
+                          <label class="form-label" for="confirmationCode">Codice di conferma (opzionale)</label>
+                          <input type="text" class="form-control" id="confirmationCode" x-model="downloadForm.confirmation_code" />
+                        </div>
+                        <div class="col-md-8">
+                          <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="autoConfirm" x-model="downloadForm.auto_confirm" />
+                            <label class="form-check-label" for="autoConfirm">Conferma automaticamente il download</label>
+                          </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                          <button class="btn btn-primary w-100" type="submit">Scarica profilo</button>
+                        </div>
+                      </form>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="col-lg-8">
-              <div class="card mb-4">
+            <!-- Secondo gruppo: Profili eSIM -->
+            <div class="col-12">
+              <div class="card">
                 <div class="card-header d-flex align-items-center justify-content-between">
                   <span>Profili eSIM</span>
                   <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadProfiles">Aggiorna</button>
@@ -176,50 +217,12 @@
               </div>
             </div>
 
-            <div class="col-lg-6">
-              <div class="card h-100">
-                <div class="card-header">Download nuovo profilo</div>
-                <div class="card-body">
-                  <form class="row g-3" @submit.prevent="downloadProfile">
-                    <div class="col-12">
-                      <label class="form-label" for="qrUpload">Carica QR code (opzionale)</label>
-                      <input type="file" class="form-control" id="qrUpload" accept="image/*" @change="handleQrUpload($event)" />
-                      <div class="form-text">Carica un'immagine del QR code per compilare automaticamente i campi sottostanti</div>
-                    </div>
-                    <div class="col-12"><hr /></div>
-                    <div class="col-12">
-                      <label class="form-label" for="smdp">SMDP+</label>
-                      <input type="text" class="form-control" id="smdp" x-model="downloadForm.smdp" placeholder="es. smdp.io" required />
-                    </div>
-                    <div class="col-12">
-                      <label class="form-label" for="matchingId">Matching ID</label>
-                      <input type="text" class="form-control" id="matchingId" x-model="downloadForm.matching_id" required />
-                    </div>
-                    <div class="col-12">
-                      <label class="form-label" for="confirmationCode">Codice di conferma (opzionale)</label>
-                      <input type="text" class="form-control" id="confirmationCode" x-model="downloadForm.confirmation_code" />
-                    </div>
-                    <div class="col-12">
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="autoConfirm" x-model="downloadForm.auto_confirm" />
-                        <label class="form-check-label" for="autoConfirm">Conferma automaticamente il download</label>
-                      </div>
-                    </div>
-                    <div class="col-12">
-                      <button class="btn btn-primary" type="submit">Scarica profilo</button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-
-            <div class="col-lg-6">
-              <div class="card h-100">
+            <!-- Terzo gruppo: Notifiche -->
+            <div class="col-12">
+              <div class="card">
                 <div class="card-header d-flex align-items-center justify-content-between">
                   <span>Notifiche</span>
-                  <div class="btn-group btn-group-sm" role="group">
-                    <button class="btn btn-outline-secondary" type="button" @click="loadNotifications">Aggiorna</button>
-                  </div>
+                  <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadNotifications">Aggiorna</button>
                 </div>
                 <div class="card-body">
                   <div class="table-responsive">
@@ -230,12 +233,13 @@
                           <th>ICCID</th>
                           <th>Operazione</th>
                           <th>Endpoint</th>
+                          <th class="text-end">Azioni</th>
                         </tr>
                       </thead>
                       <tbody>
                         <template x-if="notifications.length === 0">
                           <tr>
-                            <td colspan="4" class="text-center text-body-secondary">Nessuna notifica.</td>
+                            <td colspan="5" class="text-center text-body-secondary">Nessuna notifica.</td>
                           </tr>
                         </template>
                         <template x-for="notification in notifications" :key="`${notification.iccid}-${notification.sequence_number}`">
@@ -246,6 +250,19 @@
                               <span class="badge text-bg-info" x-text="notification.operation_name"></span>
                             </td>
                             <td class="text-break" x-text="notification.address"></td>
+                            <td>
+                              <div class="btn-group btn-group-sm float-end" role="group">
+                                <button class="btn btn-outline-primary" type="button" @click="processSingleNotification(notification.iccid, notification.sequence_number)" title="Processa">
+                                  Processa
+                                </button>
+                                <button class="btn btn-outline-danger" type="button" @click="removeSingleNotification(notification.iccid, notification.sequence_number)" title="Rimuovi">
+                                  Rimuovi
+                                </button>
+                                <button class="btn btn-outline-success" type="button" @click="processAndRemoveNotification(notification.iccid, notification.sequence_number)" title="Processa e Rimuovi">
+                                  Processa+Rimuovi
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         </template>
                       </tbody>
@@ -253,57 +270,14 @@
                   </div>
                 </div>
                 <div class="card-footer">
-                  <form class="row g-3" @submit.prevent="processNotifications">
-                    <div class="col-md-6">
-                      <label class="form-label" for="processIccid">ICCID</label>
-                      <input type="text" class="form-control" id="processIccid" x-model="processForm.iccid" required />
-                    </div>
-                    <div class="col-md-3">
-                      <label class="form-label">Modalità</label>
-                      <div class="form-check">
-                        <input class="form-check-input" type="radio" id="processAll" name="processMode" :value="true" x-model="processForm.process_all" />
-                        <label class="form-check-label" for="processAll">Tutte</label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="radio" id="processSingle" name="processMode" :value="false" x-model="processForm.process_all" />
-                        <label class="form-check-label" for="processSingle">Singola</label>
-                      </div>
-                    </div>
-                    <div class="col-md-3">
-                      <label class="form-label" for="sequenceNumber">Sequence # (opz.)</label>
-                      <input type="number" min="1" class="form-control" id="sequenceNumber" x-model="processForm.sequence_number" :disabled="processForm.process_all" />
-                    </div>
-                    <div class="col-12 d-flex justify-content-end">
-                      <button class="btn btn-primary" type="submit">Processa</button>
-                    </div>
-                  </form>
-                  <hr />
-                  <form class="row g-3" @submit.prevent="removeNotifications">
-                    <div class="col-md-4">
-                      <div class="form-check mt-4">
-                        <input class="form-check-input" type="checkbox" id="removeAll" x-model="removeForm.remove_all" />
-                        <label class="form-check-label" for="removeAll">Rimuovi tutte</label>
-                      </div>
-                    </div>
-                    <div class="col-md-4">
-                      <label class="form-label" for="removeIccid">ICCID (opz.)</label>
-                      <input type="text" class="form-control" id="removeIccid" x-model="removeForm.iccid" :disabled="removeForm.remove_all" />
-                    </div>
-                    <div class="col-md-4">
-                      <label class="form-label" for="removeSequence">Sequence # (opz.)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        class="form-control"
-                        id="removeSequence"
-                        x-model="removeForm.sequence_number"
-                        :disabled="removeForm.remove_all"
-                      />
-                    </div>
-                    <div class="col-12 d-flex justify-content-end">
-                      <button class="btn btn-outline-danger" type="submit">Rimuovi</button>
-                    </div>
-                  </form>
+                  <div class="d-flex gap-2 justify-content-end">
+                    <button class="btn btn-primary" type="button" @click="processAllNotifications">
+                      Processa tutte
+                    </button>
+                    <button class="btn btn-outline-danger" type="button" @click="removeAllNotifications">
+                      Rimuovi tutte
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
