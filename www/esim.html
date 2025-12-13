@@ -1,4 +1,4 @@
-<DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it" data-bs-theme="light">
   <head>
     <meta charset="utf-8" />
@@ -107,7 +107,7 @@
                         <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadEid">Aggiorna EID</button>
                       </div>
                     </div>
-
+                    
                     <!-- Colonna Download -->
                     <div class="col-lg-8 border-start">
                       <h5 class="fw-semibold mb-3">Download nuovo profilo</h5>
@@ -162,7 +162,7 @@
                           <th>Nickname</th>
                           <th>SPN</th>
                           <th>Stato</th>
-                          <th></th>
+                          <th class="text-end">Azioni</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -179,10 +179,9 @@
                             <td x-text="profile.service_provider_name"></td>
                             <td>
                               <span class="badge" :class="profile.enabled ? 'text-bg-success' : 'text-bg-secondary'" x-text="profile.enabled ? 'Abilitato' : 'Disabilitato'"></span>
-                              <div class="small text-body-secondary" x-text="profileStateLabel(profile.profile_state)"></div>
                             </td>
                             <td>
-                              <div class="btn-group btn-group-sm" role="group">
+                              <div class="btn-group btn-group-sm float-end" role="group">
                                 <button class="btn btn-outline-success" type="button" @click="enableProfile(profile.iccid)">Abilita</button>
                                 <button class="btn btn-outline-secondary" type="button" @click="disableProfile(profile.iccid)">Disabilita</button>
                                 <button class="btn btn-outline-danger" type="button" @click="deleteProfile(profile.iccid)">Elimina</button>
@@ -247,7 +246,7 @@
                             <td x-text="notification.sequence_number"></td>
                             <td x-text="notification.iccid"></td>
                             <td>
-                              <span class="badge text-bg-info" x-text="notification.operation_name"></span>
+                              <span class="badge" :class="notificationOperationBadge(notification.operation_name)" x-text="notification.operation_name"></span>
                             </td>
                             <td class="text-break" x-text="notification.address"></td>
                             <td>
