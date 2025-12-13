@@ -103,8 +103,8 @@
                         <p class="mb-0 text-break" x-text="eid || 'Non disponibile'"></p>
                       </div>
                       <div class="d-flex gap-2 mt-3">
-                        <button class="btn btn-outline-primary btn-sm" type="button" @click="refreshAll">Aggiorna tutto</button>
-                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadEid">Aggiorna EID</button>
+                        <button class="btn btn-primary btn-sm" type="button" @click="refreshAll">Aggiorna tutto</button>
+                        <button class="btn btn-secondary btn-sm" type="button" @click="loadEid">Aggiorna EID</button>
                       </div>
                     </div>
                     
@@ -150,7 +150,7 @@
               <div class="card">
                 <div class="card-header d-flex align-items-center justify-content-between">
                   <span>Profili eSIM</span>
-                  <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadProfiles">Aggiorna</button>
+                  <button class="btn btn-secondary btn-sm" type="button" @click="loadProfiles">Aggiorna</button>
                 </div>
                 <div class="card-body">
                   <div class="table-responsive">
@@ -181,10 +181,10 @@
                               <span class="badge" :class="profile.enabled ? 'text-bg-success' : 'text-bg-secondary'" x-text="profile.enabled ? 'Abilitato' : 'Disabilitato'"></span>
                             </td>
                             <td>
-                              <div class="btn-group btn-group-sm float-end" role="group">
-                                <button class="btn btn-outline-success" type="button" @click="enableProfile(profile.iccid)">Abilita</button>
-                                <button class="btn btn-outline-secondary" type="button" @click="disableProfile(profile.iccid)">Disabilita</button>
-                                <button class="btn btn-outline-danger" type="button" @click="deleteProfile(profile.iccid)">Elimina</button>
+                              <div class="float-end" role="group">
+                                <button class="btn btn-success btn-sm" type="button" @click="enableProfile(profile.iccid)">Abilita</button>
+                                <button class="btn btn-secondary btn-sm" type="button" @click="disableProfile(profile.iccid)">Disabilita</button>
+                                <button class="btn btn-danger btn-sm" type="button" @click="deleteProfile(profile.iccid)">Elimina</button>
                               </div>
                             </td>
                           </tr>
@@ -221,7 +221,7 @@
               <div class="card">
                 <div class="card-header d-flex align-items-center justify-content-between">
                   <span>Notifiche</span>
-                  <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadNotifications">Aggiorna</button>
+                  <button class="btn btn-secondary btn-sm" type="button" @click="loadNotifications">Aggiorna</button>
                 </div>
                 <div class="card-body">
                   <div class="table-responsive">
@@ -250,14 +250,14 @@
                             </td>
                             <td class="text-break" x-text="notification.address"></td>
                             <td>
-                              <div class="btn-group btn-group-sm float-end" role="group">
-                                <button class="btn btn-outline-primary" type="button" @click="processSingleNotification(notification.iccid, notification.sequence_number)" title="Processa">
+                              <div class="float-end" role="group">
+                                <button class="btn btn-primary btn-sm" type="button" @click="processSingleNotification(notification.iccid, notification.sequence_number)" title="Processa">
                                   Processa
                                 </button>
-                                <button class="btn btn-outline-danger" type="button" @click="removeSingleNotification(notification.iccid, notification.sequence_number)" title="Rimuovi">
+                                <button class="btn btn-danger btn-sm" type="button" @click="removeSingleNotification(notification.iccid, notification.sequence_number)" title="Rimuovi">
                                   Rimuovi
                                 </button>
-                                <button class="btn btn-outline-success" type="button" @click="processAndRemoveNotification(notification.iccid, notification.sequence_number)" title="Processa e Rimuovi">
+                                <button class="btn btn-success btn-sm" type="button" @click="processAndRemoveNotification(notification.iccid, notification.sequence_number)" title="Processa e Rimuovi">
                                   Processa+Rimuovi
                                 </button>
                               </div>
@@ -273,7 +273,7 @@
                     <button class="btn btn-primary" type="button" @click="processAllNotifications">
                       Processa tutte
                     </button>
-                    <button class="btn btn-outline-danger" type="button" @click="removeAllNotifications">
+                    <button class="btn btn-danger" type="button" @click="removeAllNotifications">
                       Rimuovi tutte
                     </button>
                   </div>
