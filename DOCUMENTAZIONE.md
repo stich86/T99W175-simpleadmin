@@ -9,12 +9,17 @@
 - `Default config files/`: XML baselines extracted from default modem env.
   - `mobileap_cfg.xml`: LAN IP, DHCP, APN template, and network defaults.
   - `mobileap_firewall.xml`: default firewall ruleset.
-- `modem_config`: interactive Bash CLI that mirrors most UI features (APN, band/cell lock, TTL, roaming, LAN IP, bridge mode, reboot, etc.)all credits to [stich86](https://github.com/stich86).
-- `www/`: root of the web payload the modem serves.
+- `modem_config`: interactive Bash CLI that mirrors most UI features (APN, band/cell lock, TTL, roaming, LAN IP, bridge mode, reboot, etc.) all credits to [stich86](https://github.com/stich86).
+- `www`: root of the web payload the modem serves.
   - HTML pages (`*.html`).
   - Static assets (`css/`, `js/`, `fonts/`, `favicon.ico`).
   - CGI helpers in `cgi-bin/`.
   - Front-end settings in `config/simpleadmin.conf`.
+- `scripts`: root of Linux scripts used by TTL and scheduler
+  - `ttl-override`: the script that set or remove the custom TTL configured with WebUI
+  - `init.d/crontab`: the script used to start or stop `crontab` daemon
+  - `systemd/crontab.service`: the wrapper that calls `/etc/init.d/crontab` script
+  - `systemd/ttl-override.service`: the wrapper that calls `/opt/scripts/ttl/ttl-override`
 
 ## HTML pages: what they do and how they do it
 ### `www/index.html` — Home / status
@@ -53,19 +58,19 @@
 - Purpose: GUI to interact with the intermediate `euicc-client` REST API (EID, profile lifecycle, downloads, notifications).
 - How: enabled only when `SIMPLEADMIN_ENABLE_ESIM=1`; the page uses `js/esim.js` + `js/esim-config.js` to fetch the base URL from `/cgi-bin/esim_config` and make REST calls to the configured server.
 
-#### Flusso avanzato e mappatura delle operazioni
-- Bootstrapping: `esimManager.bootstrap()` legge la configurazione da `/cgi-bin/esim_config` (include il flag `enabled` e `base_url`). Se l'endpoint punta a `localhost`, `computeFallbackBaseUrl()` prova a riscriverlo con l'`hostname` del browser per permettere l'accesso cross-device alla stessa istanza `euicc-client`.
-- Health check: prima di caricare i dati, `checkHealth()` interroga `GET /health` sull'API e imposta `serverHealthy`; se l'endpoint non risponde mostra un alert bloccante.
-- Rinfresco dati: `refreshAll()` esegue in parallelo `GET /eid`, `GET /profiles` e `GET /notifications` per popolare EID, lista profili e coda notifiche.
-- Gestione profili: i comandi agiscono sempre su `/profile/*` con payload JSON `{ iccid }`:
-  - `POST /profile/enable` e `POST /profile/disable` applicano lo stato operativo e ricaricano la tabella.
-  - `POST /profile/delete` richiede conferma `confirm()` lato client, poi richiama `refreshAll()` per aggiornare tutto.
-  - `POST /profile/nickname` accetta `iccid` e `nickname` (vuoto = rimozione) per annotare alias locali.
-- Download di un nuovo profilo: `POST /download` invia `{ smdp, matching_id, confirmation_code?, auto_confirm }`. Il codice di conferma è opzionale e viene eliminato dal payload quando vuoto. A valle, il form viene ripulito e scatta un `refreshAll()` per mostrare lo stato.
-- Notifiche GSMA: la tabella si alimenta da `GET /notifications` e due azioni dedicate:
-  - `POST /notifications/process` con `{ iccid, process_all, sequence_number? }` per consumare la coda (risposta `processed_count`).
-  - `POST /notifications/remove` accetta filtri opzionali (`remove_all`, `iccid`, `sequence_number`) e restituisce `removed_count` per confermare la pulizia.
-- Gestione errori e fallback: `apiFetch()` tenta prima `baseUrl`, poi l'eventuale fallback; considera non validi i response non-OK, espone il messaggio di errore restituito dal server e aggiorna dinamicamente `baseUrl` se il fallback risponde correttamente.
+#### Advanced flow and operation mapping
+- Bootstrapping: `esimManager.bootstrap()` reads the configuration from `/cgi-bin/esim_config` (includes the `enabled` flag and `base_url`). If the endpoint points to `localhost`, `computeFallbackBaseUrl()` tries to rewrite it using the browser’s `hostname` to allow cross-device access to the same `euicc-client` instance.
+- Health check: before loading data, `checkHealth()` queries `GET /health` on the API and sets `serverHealthy`; if the endpoint does not respond, it shows a blocking alert.
+- Data refresh: `refreshAll()` runs `GET /eid`, `GET /profiles`, and `GET /notifications` in parallel to populate the EID, profile list, and notification queue.
+- Profile management: commands always act on `/profile/*` with JSON payload `{ iccid }`:
+  - `POST /profile/enable` and `POST /profile/disable` apply the operational state and reload the table.
+  - `POST /profile/delete` requires a client-side `confirm()`, then calls `refreshAll()` to update everything.
+  - `POST /profile/nickname` accepts `iccid` and `nickname` (empty = removal) to annotate local aliases.
+- Downloading a new profile: `POST /download` sends `{ smdp, matching_id, confirmation_code?, auto_confirm }`. The confirmation code is optional and is removed from the payload when empty. Afterwards, the form is cleared and a `refreshAll()` is triggered to show the status.
+- GSMA notifications: the table is fed by `GET /notifications` and two dedicated actions:
+  - `POST /notifications/process` with `{ iccid, process_all, sequence_number? }` to consume the queue (response `processed_count`).
+  - `POST /notifications/remove` accepts optional filters (`remove_all`, `iccid`, `sequence_number`) and returns `removed_count` to confirm cleanup.
+- Error handling and fallback: `apiFetch()` first tries `baseUrl`, then the optional fallback; it treats non-OK responses as invalid, exposes the error message returned by the server, and dynamically updates `baseUrl` if the fallback responds correctly.
 
 ## JavaScript files
 - `www/js/dark-mode.js`: toggles light/dark themes by updating `data-bs-theme`, saves preference in `localStorage`, and defaults to dark when no choice exists.
@@ -95,6 +100,18 @@
 - `watchcat_maker`: simplified helper that validates params and delegates to `create_watchcat.sh`/`remove_watchcat.sh`, returning plain-text messages.
 - `send_sms`: accepts number and UCS-2 message, runs `AT+CMGS` through `atcli_smd8`, pipes the body to `microcom` with `CTRL+Z`, and returns the raw modem reply.
 - `esim_config`: reads `SIMPLEADMIN_ENABLE_ESIM` and `SIMPLEADMIN_ESIM_BASE_URL` from `simpleadmin.conf`, enforces authentication, and returns a JSON payload for the front-end feature toggle.
+
+## Init.d\System Scrips (`opt/scripts` - `/etc/init.d`)
+
+To enable TTL mod and crontab, copy `*.service` files into `/lib/systemd/system/` then make a symlink to make it bootable with these commands:
+
+```
+ln -s /lib/systemd/system/crontab.service /lib/systemd/system/multi-user.target.wants/crontab.service
+ln -s /lib/systemd/system/ttl-override.service /lib/systemd/system/multi-user.target.wants/ttl-override.service
+```
+
+Then copy `ttl-override` script into `/opt/scripts/ttl/` and make it executable with `chmod +x ttl-override`
+
 
 ## Operational notes
 - All pages load `js/dark-mode.js` so theme preference stays consistent through `localStorage`.
