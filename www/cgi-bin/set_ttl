@@ -61,7 +61,7 @@ if [ -n "${setTTL}" ]; then
         ttlvalue=$ttlvalue_int
     elif [ "${ttlvalue_int}" = 0 ]; then
         log_debug "Disabling TTL"
-        echo 0 > /opt/scripts/ttl/ttlvalue
+        echo 0 > /persist/ttlvalue
         commandRan="echo 0 > /persist/ttlvalue"
         ttlenabled=false
         ttlvalue=0
