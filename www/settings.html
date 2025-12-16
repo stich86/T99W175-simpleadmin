@@ -15,7 +15,8 @@
     <script src="js/bootstrap.bundle.min.js"></script>
     <script src="js/alpinejs.min.js" defer></script>
     <script src="js/esim-config.js" defer></script>
-    <script src="js/index-esim.js" defer></script>    
+    <script src="js/index-esim.js" defer></script>
+    <script src="js/dark-mode.js"></script>       
   </head>
   <body data-require-auth="true">
     <main>
@@ -191,62 +192,6 @@
               </div>
             </div>
           </div>
-          <div class="col">
-            <div class="card mb-3" data-requires-admin>
-              <div class="card-header">TTL and Network Scan Settings</div>
-              <div class="card-body">
-                <label for="TTLState" class="form-label"
-                  >Custom TTL State and Value</label
-                >
-                <div class="row">
-                  <div class="col">
-                    <div
-                      class="p-3 text-primary-emphasis bg-primary-subtle border border-primary-subtle rounded-3"
-                      x-show="ttlStatus === true"
-                    >
-                      Custom TTL is Active
-                    </div>
-
-                    <div
-                      class="p-3 text-danger-emphasis bg-danger-subtle border border-danger-subtle rounded-3"
-                      x-show="ttlStatus === false"
-                    >
-                      Cistom TTL is Inactive
-                    </div>
-                  </div>
-                  <div class="col">
-                    <div
-                      class="p-3 text-info-emphasis bg-info-subtle border border-info-subtle rounded-3 mb-4"
-                      x-text="ttlvalue"
-                    ></div>
-                  </div>
-                </div>
-                <div class="card-text mb-3">
-                  <div class="mb-4">
-                    <input
-                      type="text"
-                      class="form-control"
-                      id="ttlInput"
-                      placeholder="TTL Value"
-                      x-model="newTTL"
-                    />
-                    <div id="ttlValueHelper" class="form-text">
-                      Set TTL Value to 0 to disable.
-                    </div>
-                  </div>
-                  <div class="d-grid gap-1">
-                    <button
-                      class="btn btn-primary"
-                      type="button"
-                      @click="setTTL()"
-                    >
-                      Update
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- Loading Modal for Reboot -->
@@ -298,24 +243,9 @@
       </div>
     </main>
     <footer class="border-top py-3 mt-4">
-      <div
-        class="container d-flex flex-wrap gap-3 justify-content-between align-items-center"
-      >
-        <a
-          class="btn btn-outline-secondary btn-sm"
-          href="/credentials.html"
-          data-requires-admin="hide"
-        >
-          Credential Management
-        </a>
-        <button
-          class="btn btn-link text-reset"
-          id="darkModeToggle"
-          type="button"
-          data-allow-user="true"
-        >
-          Dark Mode
-        </button>
+      <div class="container d-flex flex-wrap gap-3 justify-content-between align-items-center">
+        <a class="btn btn-outline-secondary btn-sm" href="/credentials.html" data-requires-admin="hide">Credential Management</a>
+        <button class="btn btn-link text-reset" id="darkModeToggle" type="button" data-allow-user="true">Dark Mode</button>
       </div>
     </footer>
     <script src="js/atcommand-utils.js"></script>
