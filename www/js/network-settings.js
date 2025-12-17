@@ -17,6 +17,7 @@ document.addEventListener("alpine:init", () => {
     rebootErrorMessage: "",
     rebootSchedule: "",
     rebootForm: {
+      enabled: false,
       mode: "interval",
       intervalHours: 24,
       frequency: "daily",
@@ -49,7 +50,6 @@ document.addEventListener("alpine:init", () => {
       ipv6Enabled: true,
       bridgeEnabled: false,
       bridgeMac: "",
-      // NUOVO: Campi TTL
       ttlEnabled: false,
       ttlValue: null,
     },
@@ -222,17 +222,19 @@ document.addEventListener("alpine:init", () => {
         const savedSchedule = payload.schedule || "";
         this.rebootSchedule = savedSchedule;
         if (savedSchedule) {
+          this.rebootForm.enabled = true;  
           this.applyScheduleToForm(savedSchedule);
         } else {
+          this.rebootForm.enabled = false; 
           this.resetRebootForm();
         }
       } catch (error) {
         console.error("Error loading reboot schedule", error);
-        this.rebootErrorMessage =
-          "Impossibile leggere la pianificazione del riavvio.";
+        this.rebootErrorMessage = "Unable to read the reboot schedule.";
       }
     },
     resetRebootForm() {
+      this.rebootForm.enabled = false;
       this.rebootForm.mode = "interval";
       this.rebootForm.intervalHours = 24;
       this.rebootForm.frequency = "daily";
@@ -240,6 +242,61 @@ document.addEventListener("alpine:init", () => {
       this.rebootForm.dayOfMonth = 1;
       this.rebootForm.time = "00:00";
     },
+    async applyRebootImmediately() {
+      this.rebootSuccessMessage = "";
+      this.rebootErrorMessage = "";
+
+      if (!this.rebootForm.enabled) {
+        const confirmed = window.confirm(
+          "Are you sure you want to disable automatic reboot?"
+        );
+        if (!confirmed) {
+          this.rebootForm.enabled = true;
+          return;
+        }
+        
+        // Disabilita il reboot cancellando lo schedule
+        await this.clearRebootSchedule();
+        return;
+      }
+
+      // Validazione
+      const validationError = this.validateRebootForm();
+      if (validationError) {
+        this.rebootErrorMessage = validationError;
+        return;
+      }
+
+      const cronExpression = this.buildCronExpression();
+      this.rebootSaving = true;
+
+      try {
+        const response = await fetch("/cgi-bin/reboot_schedule", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ schedule: cronExpression }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const payload = await response.json();
+        this.rebootSchedule = payload.schedule || cronExpression;
+        this.rebootSuccessMessage = "Schedule saved and applied immediately.";
+        
+        setTimeout(() => {
+          this.rebootSuccessMessage = "";
+        }, 5000);
+      } catch (error) {
+        console.error("Error while saving the schedule", error);
+        this.rebootErrorMessage = "Unable to save the schedule. Please try again.";
+      } finally {
+        this.rebootSaving = false;
+      }
+    },    
     applyScheduleToForm(schedule) {
       if (!schedule || typeof schedule !== "string") {
         return;
@@ -253,6 +310,17 @@ document.addEventListener("alpine:init", () => {
       const [minute, hour, dayOfMonth, , dayOfWeek] = parts;
 
       const timeValue = this.formatTimeValue(hour, minute);
+
+      if (
+        minute === "0" &&
+        hour === "0" &&
+        dayOfMonth === "*" &&
+        dayOfWeek === "*"
+      ) {
+        this.rebootForm.mode = "interval";
+        this.rebootForm.intervalHours = 24;
+        return;
+      }      
 
       if (
         minute === "0" &&
@@ -292,14 +360,14 @@ document.addEventListener("alpine:init", () => {
     validateRebootForm() {
       if (this.rebootForm.mode === "interval") {
         if (!this.rebootForm.intervalHours || this.rebootForm.intervalHours < 1) {
-          return "Inserisci un intervallo di ore maggiore di zero.";
+          return "Enter an interval in hours greater than zero.";
         }
 
         return "";
       }
 
       if (!this.rebootForm.time) {
-        return "Seleziona un orario per il riavvio.";
+        return "Select a time for the reboot.";
       }
 
       const [hour, minute] = this.rebootForm.time.split(":").map(Number);
@@ -311,12 +379,12 @@ document.addEventListener("alpine:init", () => {
         minute < 0 ||
         minute > 59
       ) {
-        return "Orario non valido.";
+        return "Invalid time.";
       }
 
       if (this.rebootForm.frequency === "weekly") {
         if (this.rebootForm.dayOfWeek === "" || this.rebootForm.dayOfWeek === null) {
-          return "Scegli un giorno della settimana.";
+          return "Choose a day of the week.";
         }
       }
 
@@ -326,7 +394,7 @@ document.addEventListener("alpine:init", () => {
           this.rebootForm.dayOfMonth < 1 ||
           this.rebootForm.dayOfMonth > 31
         ) {
-          return "Scegli un giorno del mese tra 1 e 31.";
+          return "Choose a day of the month between 1 and 31.";
         }
       }
 
@@ -335,6 +403,9 @@ document.addEventListener("alpine:init", () => {
     buildCronExpression() {
       if (this.rebootForm.mode === "interval") {
         const hours = Math.max(1, parseInt(this.rebootForm.intervalHours, 10));
+        if (hours === 24) {
+          return `0 0 * * * reboot`;
+        }
         return `0 */${hours} * * * reboot`;
       }
 
@@ -351,43 +422,6 @@ document.addEventListener("alpine:init", () => {
       }
 
       return `${minute} ${hour} ${dayOfMonth} * ${dayOfWeek} reboot`;
-    },
-    async saveRebootSchedule() {
-      this.rebootSuccessMessage = "";
-      this.rebootErrorMessage = "";
-
-      const validationError = this.validateRebootForm();
-      if (validationError) {
-        this.rebootErrorMessage = validationError;
-        return;
-      }
-
-      const cronExpression = this.buildCronExpression();
-      this.rebootSaving = true;
-
-      try {
-        const response = await fetch("/cgi-bin/reboot_schedule", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({ schedule: cronExpression }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const payload = await response.json();
-        this.rebootSchedule = payload.schedule || cronExpression;
-        this.rebootSuccessMessage = "Pianificazione salvata in reboot.txt.";
-      } catch (error) {
-        console.error("Errore durante il salvataggio della pianificazione", error);
-        this.rebootErrorMessage =
-          "Non è stato possibile salvare la pianificazione. Riprova.";
-      } finally {
-        this.rebootSaving = false;
-      }
     },
     async clearRebootSchedule() {
       this.rebootSuccessMessage = "";
@@ -408,12 +442,13 @@ document.addEventListener("alpine:init", () => {
         }
 
         this.rebootSchedule = "";
+        this.rebootForm.enabled = false;
         this.resetRebootForm();
-        this.rebootSuccessMessage = "Pianificazione rimossa.";
+        this.rebootSuccessMessage = "Schedule removed.";
       } catch (error) {
-        console.error("Errore durante l'eliminazione della pianificazione", error);
+        console.error("Error while deleting the schedule", error);
         this.rebootErrorMessage =
-          "Non è stato possibile rimuovere la pianificazione. Riprova.";
+          "Unable to remove the schedule. Please try again.";
       } finally {
         this.rebootSaving = false;
       }

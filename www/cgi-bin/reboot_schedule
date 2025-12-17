@@ -7,10 +7,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCHEDULE_FILE="/persist/reboot.txt"
 
 json_escape() {
-    python3 - <<'PY' "$1"
-import json, sys
-print(json.dumps(sys.argv[1]))
-PY
+    local str="$1"
+    # Escape backslashes first
+    str="${str//\\/\\\\}"
+    # Escape double quotes
+    str="${str//\"/\\\"}"
+    # Escape newlines
+    str="${str//$'\n'/\\n}"
+    # Escape carriage returns
+    str="${str//$'\r'/\\r}"
+    # Escape tabs
+    str="${str//$'\t'/\\t}"
+    printf '"%s"' "$str"
 }
 
 send_json() {
@@ -29,6 +37,10 @@ url_decode() {
 
 parse_params() {
     local qs="$1"
+    # Inizializza le variabili
+    schedule=""
+    action=""
+    
     IFS='&' read -ra pairs <<< "$qs"
     for pair in "${pairs[@]}"; do
         [ -z "$pair" ] && continue
@@ -68,11 +80,17 @@ save_schedule() {
 
 validate_schedule() {
     local line="$1"
+    
+    # Se la stringa è vuota, non validare
+    if [ -z "$line" ]; then
+        return 0
+    fi
+    
     local field_count
     field_count=$(echo "$line" | awk '{print NF}')
 
-    if [ "$field_count" -lt 6 ]; then
-        send_json "400 Bad Request" '{"success":false,"message":"Invalid cron format. Expect at least 6 fields."}'
+    if [ "$field_count" -lt 5 ]; then
+        send_json "400 Bad Request" '{"success":false,"message":"Invalid cron format. Expect at least 5 fields (minute hour day month weekday)."}'
     fi
 }
 
@@ -89,15 +107,20 @@ handle_post() {
     else
         read -r POST_DATA
     fi
+    
     parse_params "$POST_DATA"
 
+    # Se è un'azione di delete o lo schedule è vuoto, elimina il file
     if [ "$action" = "delete" ] || [ -z "${schedule// }" ]; then
         rm -f "$SCHEDULE_FILE"
         send_json "200 OK" '{"success":true,"schedule":""}'
+        # send_json fa exit, non arriviamo qui
     fi
 
+    # Valida e salva lo schedule
     validate_schedule "$schedule"
     save_schedule "$schedule"
+    
     local schedule_json
     schedule_json=$(json_escape "$schedule")
     send_json "200 OK" "{\"success\":true,\"schedule\":${schedule_json}}"

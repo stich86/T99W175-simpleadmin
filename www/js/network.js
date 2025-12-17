@@ -1295,8 +1295,4 @@ function addCheckboxListeners(cellLock) {
         checkbox.dispatchEvent(new Event("change", { bubbles: true }));
       });
   });
-})();
-
-document.addEventListener("DOMContentLoaded", () => {
-  loadCheckboxState();
 });

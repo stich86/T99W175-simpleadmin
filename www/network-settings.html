@@ -19,7 +19,7 @@
     <script src="js/index-esim.js" defer></script>
     <script src="js/network-settings.js"></script>
     <script src="js/atcommand-utils.js"></script>
-    <script src="js/dark-mode.js"></script>
+    <script src="js/dark-mode.js" defer></script>
   </head>
   <body data-require-auth="true">
     <main>
@@ -289,6 +289,13 @@
 
                   <hr class="my-4" />
 
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <h5 class="mb-0">Custom TTL</h5>
+                  </div>
+                  <p class="text-body-secondary mb-3">
+                    Set up a custom time-to-live for each outbound packet.
+                  </p>
+
                   <div class="form-check form-switch mb-3">
                     <input
                       id="ttlEnabled"
@@ -356,7 +363,7 @@
 
                   <template x-if="form.ttlEnabled && form.ttlValue">
                     <div class="alert alert-info mt-3" role="alert">
-                      <strong>Custom TTL active:</strong> Packets will be sent with TTL value of <span x-text="form.ttlValue"></span>.
+                      <strong>Custom TTL is applied:</strong> Packets will be sent with TTL value of <span x-text="form.ttlValue"></span>.
                     </div>
                   </template>
 
@@ -364,140 +371,132 @@
 
                   <div class="mb-3">
                     <div class="d-flex align-items-center gap-2 mb-1">
-                      <h5 class="mb-0">Riavvio automatico</h5>
-                      <span class="badge text-bg-light">Salvato in reboot.txt (cron)</span>
+                      <h5 class="mb-0">Automatic reboot</h5>
                     </div>
                     <p class="text-body-secondary mb-3">
-                      Imposta un riavvio pianificato: l'impostazione viene salvata in formato compatibile con cron e potrai modificarla o cancellarla in seguito.
+                      Set up a scheduled reboot: the configuration is saved in a cron-compatible format and you will be able to modify or delete it later.
                     </p>
 
-                    <div class="btn-group mb-3" role="group" aria-label="Auto reboot options">
-                      <button
-                        type="button"
-                        class="btn"
-                        :class="rebootForm.mode === 'interval' ? 'btn-primary' : 'btn-outline-primary'"
-                        @click="rebootForm.mode = 'interval'"
+                    <div class="form-check form-switch mb-3">
+                      <input
+                        id="rebootEnabled"
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
                         :disabled="rebootSaving"
-                      >
-                        Ogni X ore
-                      </button>
-                      <button
-                        type="button"
-                        class="btn"
-                        :class="rebootForm.mode === 'schedule' ? 'btn-primary' : 'btn-outline-primary'"
-                        @click="rebootForm.mode = 'schedule'"
-                        :disabled="rebootSaving"
-                      >
-                        Programmazione
-                      </button>
+                        x-model="rebootForm.enabled"
+                      />
+                      <label class="form-check-label" for="rebootEnabled">
+                        Enable automatic reboot
+                        <span x-show="rebootSaving" class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                      </label>
                     </div>
 
-                    <div class="row g-3" x-show="rebootForm.mode === 'interval'">
-                      <div class="col-md-4 col-lg-3">
-                        <label class="form-label" for="rebootIntervalHours">Ogni quante ore?</label>
-                        <div class="input-group">
+                    <div x-show="rebootForm.enabled">
+                      <div class="btn-group mb-3" role="group" aria-label="Auto reboot options">
+                        <button type="button" class="btn" :class="rebootForm.mode === 'interval' ? 'btn-primary' : 'btn-outline-primary'" @click="rebootForm.mode = 'interval'" :disabled="rebootSaving">Every X hours</button>
+                        <button type="button" class="btn" :class="rebootForm.mode === 'schedule' ? 'btn-primary' : 'btn-outline-primary'" @click="rebootForm.mode = 'schedule'" :disabled="rebootSaving">Schedule</button>
+                      </div>
+
+                      <div class="row g-3" x-show="rebootForm.mode === 'interval'">
+                        <div class="col-md-4 col-lg-5">
+                          <label class="form-label" for="rebootIntervalHours">Every how many hours?</label>
+                          <div class="input-group">
+                            <input
+                              id="rebootIntervalHours"
+                              class="form-control"
+                              type="number"
+                              min="1"
+                              max="24"
+                              :disabled="rebootSaving"
+                              x-model.number="rebootForm.intervalHours"
+                            />
+                            <span class="input-group-text">hours</span>
+                          </div>
+                          <div class="form-text">Performs a reboot every N hours (e.g. 12 => <code>0 */12 * * * reboot</code>).</div>
+                        </div>
+
+                        <div class="col-md-4 col-lg-3">
+                          <label class="form-label">&nbsp;</label>
+                          <button type="button" class="btn btn-primary w-100" :disabled="rebootSaving" @click="applyRebootImmediately()">
+                            <span x-show="!rebootSaving">Apply</span>
+                            <span x-show="rebootSaving">
+                              <span class="spinner-border spinner-border-sm" role="status"></span>
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="row g-3" x-show="rebootForm.mode === 'schedule'">
+                        <div class="col-md-4 col-lg-3">
+                          <label class="form-label" for="rebootFrequency">Frequency</label>
+                          <select
+                            id="rebootFrequency"
+                            class="form-select"
+                            :disabled="rebootSaving"
+                            x-model="rebootForm.frequency"
+                          >
+                            <option value="daily">Every day</option>
+                            <option value="weekly">Every week</option>
+                            <option value="monthly">Every month</option>
+                          </select>
+                        </div>
+
+                        <div class="col-md-4 col-lg-3" x-show="rebootForm.frequency === 'weekly'">
+                          <label class="form-label" for="rebootDayOfWeek">Day</label>
+                          <select
+                            id="rebootDayOfWeek"
+                            class="form-select"
+                            :disabled="rebootSaving"
+                            x-model="rebootForm.dayOfWeek"
+                          >
+                            <option value="1">Monday</option>
+                            <option value="2">Tuesday</option>
+                            <option value="3">Wednesday</option>
+                            <option value="4">Thursday</option>
+                            <option value="5">Friday</option>
+                            <option value="6">Saturday</option>
+                            <option value="0">Sunday</option>
+                          </select>
+                        </div>
+
+                        <div class="col-md-4 col-lg-3" x-show="rebootForm.frequency === 'monthly'">
+                          <label class="form-label" for="rebootDayOfMonth">Day of the month</label>
                           <input
-                            id="rebootIntervalHours"
+                            id="rebootDayOfMonth"
                             class="form-control"
                             type="number"
                             min="1"
-                            max="720"
+                            max="31"
                             :disabled="rebootSaving"
-                            x-model.number="rebootForm.intervalHours"
+                            x-model.number="rebootForm.dayOfMonth"
                           />
-                          <span class="input-group-text">ore</span>
+                          <div class="form-text">Example: 1 = the first day of every month.</div>
                         </div>
-                        <div class="form-text">Esegue un riavvio ogni N ore (es. 12 =&gt; <code>0 */12 * * * reboot</code>).</div>
-                      </div>
-                    </div>
 
-                    <div class="row g-3" x-show="rebootForm.mode === 'schedule'">
-                      <div class="col-md-4 col-lg-3">
-                        <label class="form-label" for="rebootFrequency">Frequenza</label>
-                        <select
-                          id="rebootFrequency"
-                          class="form-select"
-                          :disabled="rebootSaving"
-                          x-model="rebootForm.frequency"
-                        >
-                          <option value="daily">Ogni giorno</option>
-                          <option value="weekly">Ogni settimana</option>
-                          <option value="monthly">Ogni mese</option>
-                        </select>
-                      </div>
+                        <div class="col-md-4 col-lg-3">
+                          <label class="form-label" for="rebootTime">Time</label>
+                          <input
+                            id="rebootTime"
+                            class="form-control"
+                            type="time"
+                            step="60"
+                            :disabled="rebootSaving"
+                            x-model="rebootForm.time"
+                          />
+                          <div class="form-text">Examples: 00:00 (midnight), 16:00 (every day at 4 PM).</div>
+                        </div>
 
-                      <div class="col-md-4 col-lg-3" x-show="rebootForm.frequency === 'weekly'">
-                        <label class="form-label" for="rebootDayOfWeek">Giorno</label>
-                        <select
-                          id="rebootDayOfWeek"
-                          class="form-select"
-                          :disabled="rebootSaving"
-                          x-model="rebootForm.dayOfWeek"
-                        >
-                          <option value="1">Lunedì</option>
-                          <option value="2">Martedì</option>
-                          <option value="3">Mercoledì</option>
-                          <option value="4">Giovedì</option>
-                          <option value="5">Venerdì</option>
-                          <option value="6">Sabato</option>
-                          <option value="0">Domenica</option>
-                        </select>
+                        <div class="col-md-4 col-lg-3">
+                          <label class="form-label">&nbsp;</label>
+                          <button type="button" class="btn btn-primary w-100" :disabled="rebootSaving" @click="applyRebootImmediately()">
+                            <span x-show="!rebootSaving">Apply</span>
+                            <span x-show="rebootSaving">
+                              <span class="spinner-border spinner-border-sm" role="status"></span>
+                            </span>
+                          </button>
+                        </div>
                       </div>
-
-                      <div class="col-md-4 col-lg-3" x-show="rebootForm.frequency === 'monthly'">
-                        <label class="form-label" for="rebootDayOfMonth">Giorno del mese</label>
-                        <input
-                          id="rebootDayOfMonth"
-                          class="form-control"
-                          type="number"
-                          min="1"
-                          max="31"
-                          :disabled="rebootSaving"
-                          x-model.number="rebootForm.dayOfMonth"
-                        />
-                        <div class="form-text">Esempio: 1 = ogni primo del mese.</div>
-                      </div>
-
-                      <div class="col-md-4 col-lg-3">
-                        <label class="form-label" for="rebootTime">Orario</label>
-                        <input
-                          id="rebootTime"
-                          class="form-control"
-                          type="time"
-                          step="60"
-                          :disabled="rebootSaving"
-                          x-model="rebootForm.time"
-                        />
-                        <div class="form-text">Esempi: 00:00 (mezzanotte), 16:00 (ogni giorno alle 16).</div>
-                      </div>
-                    </div>
-
-                    <div class="d-flex flex-wrap gap-2 mt-3">
-                      <button
-                        type="button"
-                        class="btn btn-primary"
-                        :disabled="rebootSaving"
-                        @click="saveRebootSchedule()"
-                      >
-                        Salva pianificazione
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-outline-secondary"
-                        :disabled="rebootSaving"
-                        @click="loadRebootSchedule()"
-                      >
-                        Annulla modifiche
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-outline-danger"
-                        :disabled="rebootSaving || !rebootSchedule"
-                        @click="clearRebootSchedule()"
-                      >
-                        Rimuovi pianificazione
-                      </button>
-                    </div>
 
                     <template x-if="rebootSuccessMessage">
                       <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
@@ -513,13 +512,15 @@
                       </div>
                     </template>
 
-                    <template x-if="rebootSchedule">
+                    <template x-if="rebootSchedule && rebootForm.enabled">
                       <div class="alert alert-info mt-3" role="alert">
-                        <strong>Pianificazione corrente:</strong>
+                        <strong>Current schedule:</strong>
                         <code x-text="rebootSchedule"></code>
                       </div>
                     </template>
                   </div>
+
+                  <hr class="my-4" />
 
                   <template x-if="validationErrors.length">
                     <div class="alert alert-warning mt-4" role="alert">
@@ -537,9 +538,7 @@
                   </p>
 
                   <div class="d-flex gap-2 justify-content-end mt-3">
-                    <button type="button" class="btn btn-outline-secondary" :disabled="isSaving" @click="resetForm">
-                      Reset
-                    </button>
+                    <button type="button" class="btn btn-outline-secondary" :disabled="isSaving" @click="resetForm">Reset</button>
                     <button type="submit" class="btn btn-primary" :disabled="isSaving">
                       <template x-if="!isSaving">
                         <span>Save changes</span>
