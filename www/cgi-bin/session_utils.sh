@@ -19,6 +19,16 @@ fi
 
 SIMPLEADMIN_ENABLE_LOGIN="${SIMPLEADMIN_ENABLE_LOGIN:-1}"
 
+credentials_guide() {
+    cat <<'EOF'
+# Formato credenziali: username:ruolo:password
+# - Ogni riga definisce un account con nome utente, ruolo e password.
+# - Ruoli permessi: "admin" (accesso completo) e "user" (accesso in sola lettura).
+# - La riga "admin:admin:admin" mantiene l'amministratore predefinito.
+# - La riga "guest:user:guest" fornisce l'utente di test in sola lettura.
+EOF
+}
+
 CREDENTIALS_FILE="${SIMPLEADMIN_CREDENTIALS_FILE:-$SCRIPT_DIR/credentials.txt}"
 SESSION_STORE="${SIMPLEADMIN_SESSION_STORE:-/tmp/simpleadmin_sessions.txt}"
 SESSION_TTL="${SIMPLEADMIN_SESSION_TTL:-43200}"
@@ -77,6 +87,32 @@ current_timestamp() {
     date +%s
 }
 
+write_default_credentials_file() {
+    {
+        credentials_guide
+        printf 'admin:admin:admin\n'
+        printf 'guest:user:guest\n'
+    } > "$CREDENTIALS_FILE"
+}
+
+ensure_credentials_commentary_locked() {
+    if [ ! -f "$CREDENTIALS_FILE" ]; then
+        return 0
+    fi
+
+    local first_line
+    first_line="$(head -n 1 "$CREDENTIALS_FILE" 2>/dev/null || true)"
+    if [ "${first_line#\#}" = "$first_line" ]; then
+        local tmp
+        tmp="${CREDENTIALS_FILE}.tmp"
+        {
+            credentials_guide
+            cat "$CREDENTIALS_FILE"
+        } > "$tmp"
+        mv "$tmp" "$CREDENTIALS_FILE"
+    fi
+}
+
 ensure_credentials_file() {
     if login_is_disabled; then
         return 0
@@ -84,9 +120,11 @@ ensure_credentials_file() {
     mkdir -p "$(dirname "$CREDENTIALS_FILE")"
 
     if [ ! -f "$CREDENTIALS_FILE" ] || [ ! -s "$CREDENTIALS_FILE" ]; then
-        printf 'admin:admin:admin\n' > "$CREDENTIALS_FILE"
+        write_default_credentials_file
         return 0
     fi
+
+    { flock -x 200; ensure_credentials_commentary_locked; ensure_defaults_locked; } 200>"${CREDENTIALS_FILE}.lock"
 }
 
 ensure_session_store() {
@@ -282,12 +320,25 @@ ensure_admin_exists_locked() {
     fi
 }
 
+ensure_guest_exists_locked() {
+    if ! awk -F ':' '$1=="guest" {found=1} END{exit found?0:1}' "$CREDENTIALS_FILE"; then
+        printf 'guest:user:guest\n' >> "$CREDENTIALS_FILE"
+    fi
+}
+
+ensure_defaults_locked() {
+    ensure_admin_exists_locked
+    ensure_guest_exists_locked
+}
+
 list_users() {
     ensure_credentials_file
     local first=1
     printf '['
     while IFS=':' read -r username role password; do
-        [ -z "$username" ] && continue
+        case "$username" in
+            ''|\#*) continue ;;
+        esac
         if [ $first -eq 0 ]; then
             printf ','
         fi
@@ -326,7 +377,7 @@ add_user() {
             return 1
         fi
         printf '%s:%s:%s\n' "$username" "$role" "$password" >> "$CREDENTIALS_FILE"
-        ensure_admin_exists_locked
+        ensure_defaults_locked
     } 200>"$lock"
     return 0
 }
@@ -335,6 +386,9 @@ update_password() {
     local username="$1"
     local password="$2"
     ensure_credentials_file
+    if [ "$username" = "guest" ]; then
+        return 3
+    fi
     local lock="${CREDENTIALS_FILE}.lock"
     {
         flock -x 200
@@ -343,6 +397,7 @@ update_password() {
         fi
         awk -F ':' -v user="$username" -v password="$password" 'BEGIN{OFS=":"} { if ($1==user) {$3=password}; print }' "$CREDENTIALS_FILE" > "${CREDENTIALS_FILE}.tmp"
         mv "${CREDENTIALS_FILE}.tmp" "$CREDENTIALS_FILE"
+        ensure_defaults_locked
     } 200>"$lock"
     return 0
 }
@@ -351,6 +406,9 @@ update_role() {
     local username="$1"
     local role="$2"
     ensure_credentials_file
+    if [ "$username" = "guest" ]; then
+        return 3
+    fi
     if ! validate_role "$role"; then
         return 2
     fi
@@ -362,7 +420,7 @@ update_role() {
         fi
         awk -F ':' -v user="$username" -v role="$role" 'BEGIN{OFS=":"} { if ($1==user) {$2=role}; print }' "$CREDENTIALS_FILE" > "${CREDENTIALS_FILE}.tmp"
         mv "${CREDENTIALS_FILE}.tmp" "$CREDENTIALS_FILE"
-        ensure_admin_exists_locked
+        ensure_defaults_locked
     } 200>"$lock"
     return 0
 }
@@ -370,6 +428,9 @@ update_role() {
 delete_user() {
     local username="$1"
     ensure_credentials_file
+    if [ "$username" = "guest" ]; then
+        return 3
+    fi
     local lock="${CREDENTIALS_FILE}.lock"
     {
         flock -x 200
@@ -385,7 +446,7 @@ delete_user() {
         fi
         grep -v -E "^${username}:" "$CREDENTIALS_FILE" > "${CREDENTIALS_FILE}.tmp"
         mv "${CREDENTIALS_FILE}.tmp" "$CREDENTIALS_FILE"
-        ensure_admin_exists_locked
+        ensure_defaults_locked
     } 200>"$lock"
     return 0
 }
