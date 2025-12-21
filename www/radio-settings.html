@@ -17,7 +17,7 @@
     <script src="js/alpinejs.min.js" defer></script>
     <script src="js/esim-config.js" defer></script>
     <script src="js/index-esim.js" defer></script>
-    <script src="js/network.js"></script>
+    <script src="js/radio-settings.js"></script>
     <script src="js/generate-freq-box.js"></script>
     <script src="js/populate-checkbox.js"></script>
     <script src="js/parse-settings.js"></script>
@@ -46,26 +46,13 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarText">
               <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                  <a class="nav-link" href="/">Home</a>
-                </li>
-                <li class="nav-item"><a class="nav-link active" href="network.html" aria-current="page">4G/5G Settings</a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link" href="/network-settings.html">Network Settings</a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link active" href="/advanced.html" aria-current="page">Advanced</a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link" href="/sms.html">SMS</a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link" href="deviceinfo.html">Device Information</a>
-                </li>
-                <li class="nav-item" id="esimNavItem" style="display: none;">
-                  <a class="nav-link" href="/esim.html">eSIM</a>
-                </li>                
+                <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/radio-settings.html">Radio Settings</a></li>
+                <li class="nav-item"><a class="nav-link" href="/network-settings.html">Network Settings</a></li>
+                <li class="nav-item"><a class="nav-link" href="/advanced.html">Advanced</a></li>
+                <li class="nav-item"><a class="nav-link" href="/sms.html">SMS</a></li>
+                <li class="nav-item"><a class="nav-link" href="deviceinfo.html">Device Information</a></li>
+                <li class="nav-item" id="esimNavItem" style="display: none;"><a class="nav-link" href="/esim.html">eSIM</a></li>                
               </ul>
               <div
                 class="navbar-text d-flex align-items-center gap-3 flex-wrap justify-content-end"
@@ -226,7 +213,7 @@
 
                 <div x-show="activeUtilityTab === 'sim'">
                   <div class="row">
-                    <div class="col-lg-6">
+                    <div class="col-lg-8">
                       <p class="text-muted">
                         Currently active SIM:
                         <span class="fw-semibold" x-text="formatActiveSimLabel()"></span>
