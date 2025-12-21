@@ -56,6 +56,7 @@ function cellLocking() {
     isApplyingSimChange: false,
     cellLockStatus: "Unknown",
     bands: "Fetching Bands...",
+    selectedBandsCount: 0,
     isGettingBands: false,
     rawdata: "",
     networkModeListenerAttached: false,
@@ -384,6 +385,7 @@ function cellLocking() {
         // Update currentNetworkMode and updatedLockedBands
         this.currentNetworkMode = selectedMode || this.currentNetworkMode;
         this.updatedLockedBands = newCheckedValues;
+        this.selectedBandsCount = newCheckedValues.length;
       };
 
       // Function to add event listener to network mode dropdown
