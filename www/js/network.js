@@ -1025,6 +1025,10 @@ function cellLocking() {
       this.showModal = true;
       const result = await this.sendATcommand(atcmd);
 
+      // Workaround for Auto mode, when enable LTE lock, modem will go only in 4G mode
+      atcmd = `AT^SLMODE=1,0`
+      this.sendATcommand(atcmd);
+
       if (!result.ok) {
         this.showModal = false;
         alert(
@@ -1066,6 +1070,10 @@ function cellLocking() {
       // Mock data
       this.showModal = true;
       const result = await this.sendATcommand(atcmd);
+
+      // Workaround for Auto mode, when enable NR lock, modem will go only in 5G mode
+      atcmd = `AT^SLMODE=1,0`
+      this.sendATcommand(atcmd);
 
       if (!result.ok) {
         this.showModal = false;
