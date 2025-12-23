@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Simple T99</title>
     <!-- Import all the bootstrap css files from css folder -->
-    <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/styles.css" />     
 
     <!-- Logo -->
     <link rel="simpleadmin-logo" href="favicon.ico" />
@@ -79,7 +79,10 @@
             <div class="card">
               <div class="card-header">
                 <div class="row align-items-center">
-                  <div class="col">Band Locking</div>
+                <div class="col">
+                  <div class="fw-semibold">Band Locking</div>
+                  <small class="text-muted" x-text="'Active bands: ' + selectedBandsCount"></small>
+                </div>
                   <div class="col-md-3">
                     <select
                       class="form-select"
@@ -105,21 +108,20 @@
                 ></form>
               </div>
               <div class="card-footer">
-                <div class="d-flex align-items-center">
-                  <div class="col">
-                    <button
-                      type="button"
-                      class="btn btn-danger m-2"
-                      @click="resetBandLocking()"
-                      data-requires-admin
-                    >
-                      Reset
-                    </button>
-                  </div>
+                <div class="d-flex align-items-center justify-content-between">
+                  <small class="text-muted">
+                    To enable or disable bands, click the corresponding checkbox.
+                    Changes are applied automatically.
+                  </small>
+                  <button
+                    type="button"
+                    class="btn btn-danger"
+                    @click="resetBandLocking()"
+                    data-requires-admin
+                  >
+                    Reset to defaults
+                  </button>
                 </div>
-              </div>
-              <div class="card-footer">
-                <p x-text="'Active bands: ' + selectedBandsCount"></p>
               </div>
             </div>
           </div>
@@ -128,9 +130,9 @@
         <div class="row mt-4 g-3">
           <div class="col-12 col-lg-5">
             <div class="card h-100">
-              <div class="card-header pb-0">
+              <div class="card-header">
                 <ul class="nav nav-tabs card-header-tabs">
-                  <li class="nav-item" role="presentation">
+                  <li class="nav-item">
                     <button
                       type="button"
                       class="nav-link"
@@ -140,7 +142,8 @@
                       APN Settings
                     </button>
                   </li>
-                  <li class="nav-item" role="presentation">
+
+                  <li class="nav-item">
                     <button
                       type="button"
                       class="nav-link"
@@ -504,7 +507,7 @@
                 </div>
               </div>
               <div class="card-footer">
-                Cell locking is supported only on the primary cell and requires a reboot to take effect. Once applied, the lock persists across reboots.
+                <small class="text-muted">Cell locking is supported only on the primary cell and requires a reboot to take effect. Once applied, the lock persists across reboots.</small>
               </div>
             </div>
           </div>

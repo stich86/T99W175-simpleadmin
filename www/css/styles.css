@@ -86,6 +86,10 @@
   font-family: "Poppins", sans-serif;
 }
 
+.card-header-tabs {
+  margin-bottom: -8px;
+}
+
 .custom-checkbox .form-check-input {
   margin-right: 1px;
 }

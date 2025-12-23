@@ -1257,7 +1257,7 @@ function cellLocking() {
         return;
       }
 
-      this.countdown = 5;
+      this.countdown = 3;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
