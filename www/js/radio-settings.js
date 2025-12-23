@@ -57,6 +57,13 @@ function cellLocking() {
     cellLockStatus: "Unknown",
     bands: "Fetching Bands...",
     selectedBandsCount: 0,
+    bandLockTimeout: null,
+    previousLockedBands: [],
+    allAvailableBands: {
+      LTE: [],
+      NSA: [],
+      SA: []
+    },
     isGettingBands: false,
     rawdata: "",
     networkModeListenerAttached: false,
@@ -261,10 +268,6 @@ function cellLocking() {
         this.locked_sa_bands,
         this
       );
-
-      if (typeof this.trackCheckboxChanges === "function") {
-        this.trackCheckboxChanges();
-      }
     },
 
     async getLockedBands() {
@@ -346,31 +349,81 @@ function cellLocking() {
         this
       );
     },
-
     init() {
-      // Function to populate checkboxes
+      console.log("=== init() called ===");
+      const self = this;
+
       const showPopulateCheckboxes = async () => {
+        console.log("--- showPopulateCheckboxes START ---");
+        const currentMode = document.getElementById("networkModeBand")?.value;
+        console.log("Current dropdown mode:", currentMode);
+        
         try {
-          await this.getSupportedBands();
+          await self.getSupportedBands();
+          console.log("After getSupportedBands:");
+          console.log("  lte_bands:", self.lte_bands);
+          console.log("  nsa_bands:", self.nsa_bands);
+          console.log("  sa_bands:", self.sa_bands);
+          console.log("  locked_lte_bands:", self.locked_lte_bands);
+          console.log("  locked_nsa_bands:", self.locked_nsa_bands);
+          console.log("  locked_sa_bands:", self.locked_sa_bands);
 
-          // Add event listeners to checkboxes after populating them
-          addCheckboxListeners(this);
+          // Store all available bands for each technology
+          self.allAvailableBands.LTE = self.lte_bands.split(':').filter(Boolean);
+          self.allAvailableBands.NSA = self.nsa_bands.split(':').filter(Boolean);
+          self.allAvailableBands.SA = self.sa_bands.split(':').filter(Boolean);
+          
+          console.log("All available bands stored:");
+          console.log("  LTE:", self.allAvailableBands.LTE);
+          console.log("  NSA:", self.allAvailableBands.NSA);
+          console.log("  SA:", self.allAvailableBands.SA);
 
-          if (typeof this.trackCheckboxChanges === "function") {
-            this.trackCheckboxChanges();
-          }
-        } catch (error) {
-          console.error(
-            "Error while populating supported bands:",
-            error
+          addCheckboxListeners(self);
+
+          const checkboxes = document.querySelectorAll(
+            '#checkboxForm input[type="checkbox"]'
           );
+          
+          console.log("Total checkboxes found:", checkboxes.length);
+          
+          const checkedValues = [];
+          const allValues = [];
+
+          checkboxes.forEach(function (checkbox) {
+            allValues.push(checkbox.value);
+            if (checkbox.checked) {
+              checkedValues.push(checkbox.value);
+            }
+          });
+
+          console.log("All checkbox values:", allValues);
+          console.log("Checked checkbox values:", checkedValues);
+
+          // Update state
+          self.updatedLockedBands = checkedValues;
+          self.previousLockedBands = [...checkedValues];
+          self.selectedBandsCount = checkedValues.length;
+          self.currentNetworkMode = currentMode;
+          
+          console.log("State updated:");
+          console.log("  updatedLockedBands:", self.updatedLockedBands);
+          console.log("  previousLockedBands:", self.previousLockedBands);
+          console.log("  selectedBandsCount:", self.selectedBandsCount);
+          console.log("  currentNetworkMode:", self.currentNetworkMode);
+          console.log("--- showPopulateCheckboxes END ---");
+
+        } catch (error) {
+          console.error("ERROR in showPopulateCheckboxes:", error);
         }
       };
 
-      // Function to track checkbox changes
       this.trackCheckboxChanges = () => {
+        console.log(">>> trackCheckboxChanges triggered <<<");
+        
         const modeDropdown = document.getElementById("networkModeBand");
         const selectedMode = modeDropdown ? modeDropdown.value : null;
+        console.log("Selected mode:", selectedMode);
+        
         const checkboxes = document.querySelectorAll(
           '#checkboxForm input[type="checkbox"]'
         );
@@ -382,15 +435,39 @@ function cellLocking() {
           }
         });
 
-        // Update currentNetworkMode and updatedLockedBands
-        this.currentNetworkMode = selectedMode || this.currentNetworkMode;
-        this.updatedLockedBands = newCheckedValues;
-        this.selectedBandsCount = newCheckedValues.length;
+        console.log("New checked values:", newCheckedValues);
+        console.log("Count:", newCheckedValues.length);
+
+        // Validation: At least one band must be selected
+        if (newCheckedValues.length === 0) {
+          console.warn("VALIDATION: No bands selected, reverting last change");
+          const lastChanged = event?.target;
+          if (lastChanged && lastChanged.type === 'checkbox') {
+            lastChanged.checked = true;
+            alert("At least one band must be selected.\nUse 'Reset' to restore all available bands.");
+          }
+          return;
+        }
+
+        console.log("Updating state:");
+        console.log("  OLD updatedLockedBands:", self.updatedLockedBands);
+        console.log("  NEW updatedLockedBands:", newCheckedValues);
+        
+        self.currentNetworkMode = selectedMode || self.currentNetworkMode;
+        self.updatedLockedBands = newCheckedValues;
+        self.selectedBandsCount = newCheckedValues.length;
+        
+        clearTimeout(self.bandLockTimeout);
+        console.log("Setting timeout for lockSelectedBandsAuto (800ms)...");
+        self.bandLockTimeout = setTimeout(() => {
+          self.lockSelectedBandsAuto();
+        }, 800);
+        console.log(">>> trackCheckboxChanges END <<<");
       };
 
-      // Function to add event listener to network mode dropdown
       const addNetworkModeListener = () => {
-        if (this.networkModeListenerAttached) {
+        if (self.networkModeListenerAttached) {
+          console.log("Network mode listener already attached");
           return;
         }
 
@@ -402,14 +479,22 @@ function cellLocking() {
         }
 
         dropdown.addEventListener("change", () => {
-          showPopulateCheckboxes(); // Update checkboxes when network mode changes
+          console.log("!!! NETWORK MODE DROPDOWN CHANGED !!!");
+          console.log("New value:", dropdown.value);
+          
+          clearTimeout(self.bandLockTimeout);
+          console.log("Cleared pending timeout");
+          
+          showPopulateCheckboxes();
         });
 
-        this.networkModeListenerAttached = true;
+        self.networkModeListenerAttached = true;
+        console.log("Network mode listener attached");
       };
 
       const addProviderBandsListener = () => {
-        if (this.providerBandsListenerAttached) {
+        if (self.providerBandsListenerAttached) {
+          console.log("Provider bands listener already attached");
           return;
         }
 
@@ -421,16 +506,19 @@ function cellLocking() {
         }
 
         providerBands.addEventListener("change", () => {
+          console.log("Provider bands checkbox changed");
+          clearTimeout(self.bandLockTimeout);
           showPopulateCheckboxes();
         });
 
-        this.providerBandsListenerAttached = true;
+        self.providerBandsListenerAttached = true;
+        console.log("Provider bands listener attached");
       };
 
-      // Execute necessary functions on initialization
       showPopulateCheckboxes();
       addNetworkModeListener();
       addProviderBandsListener();
+      console.log("=== init() completed ===");
     },
     async getCurrentSettings() {
       const atcmd =
@@ -597,161 +685,143 @@ function cellLocking() {
             checkbox.dispatchEvent(new Event("change", { bubbles: true }));
         });
     },
-    async lockSelectedBands() {
-      // Get the updated this.currentNetworkMode = selectedMode; and this.updatedLockedBands = newCheckedValues;
-      const selectedMode =
-        this.currentNetworkMode ||
-        (document.getElementById("networkModeBand") || {}).value ||
-        null;
+    async lockSelectedBandsAuto() {
+      console.log("=== lockSelectedBandsAuto called ===");
+      console.log("currentNetworkMode:", this.currentNetworkMode);
+      console.log("updatedLockedBands:", this.updatedLockedBands);
+      
+      const selectedMode = this.currentNetworkMode;
       const newCheckedValues = Array.isArray(this.updatedLockedBands)
         ? this.updatedLockedBands
         : [];
-      let atcmd;
 
-      // Check if both values are null then show the error message
       if (selectedMode === null || newCheckedValues.length === 0) {
-        alert("Select at least one band to lock.");
+        console.warn("ABORT: Invalid mode or no bands");
+        return;
+      }
+
+      // Get all available bands for current technology
+      const allBands = this.allAvailableBands[selectedMode] || [];
+      console.log(`All available bands for ${selectedMode}:`, allBands);
+      console.log(`Selected bands: ${newCheckedValues.length}/${allBands.length}`);
+
+      let networkType;
+      if (selectedMode === "LTE") {
+        networkType = "LTE";
+      } else if (selectedMode === "NSA" || selectedMode === "SA") {
+        networkType = "NR5G";
       } else {
-        if (selectedMode === "LTE") {
-          let bandss = newCheckedValues
-            .join(",")
-            .replace(/,$/, "");
-          atcmd = `AT^BAND_PREF=LTE,2,${bandss}`;
-        } else if (selectedMode === "NSA") {
-          let bandss = newCheckedValues
-            .join(",")
-            .replace(/,$/, "");
-          atcmd = `AT^BAND_PREF=NR5G,2,${bandss}`;
-        } else if (selectedMode === "SA") {
-          let bandss = newCheckedValues
-            .join(",")
-            .replace(/,$/, "");
-          atcmd = `AT^BAND_PREF=NR5G,2,${bandss}`;
-        } else {
-          alert("Invalid network mode selected");
-          return;
-        }
+        console.warn("ABORT: Invalid network mode:", selectedMode);
+        return;
+      }
 
-        // Do a 2 second countdown
-        this.showModal = true;
-        this.countdown = 2;
-
+      // STRATEGY 1: If 15 or fewer bands selected, send single enable command
+      if (newCheckedValues.length <= 15) {
+        console.log("Strategy: Single enable command (≤15 bands)");
+        
+        const bands = newCheckedValues.join(",");
+        const atcmd = `AT^BAND_PREF=${networkType},2,${bands}`;
+        
+        console.log(`Sending enable command:`, atcmd);
+        
         const result = await this.sendATcommand(atcmd);
-
+        
         if (!result.ok) {
-          this.showModal = false;
-          alert(
-            this.lastErrorMessage ||
-              "Unable to lock the selected bands. Please try again."
-          );
+          console.error("FAILED to enable bands:", this.lastErrorMessage);
+          alert(`Failed to update bands: ${this.lastErrorMessage}`);
           return;
         }
-
-        const interval = setInterval(() => {
-          this.countdown--;
-          if (this.countdown === 0) {
-            clearInterval(interval);
-            this.showModal = false;
-
-            // Refresh the page to show the updated bands
-            this.init();
+        
+        console.log("Bands enabled successfully");
+        
+      } else {
+        // STRATEGY 2: More than 15 bands selected
+        // Step 1: Reset to enable all bands
+        // Step 2: Disable the unselected bands
+        
+        console.log("Strategy: Reset + Disable unselected (>15 bands)");
+        
+        // Calculate which bands to disable (all bands - selected bands)
+        const bandsToDisable = allBands.filter(band => !newCheckedValues.includes(band));
+        
+        console.log(`Bands to disable: ${bandsToDisable.length}`, bandsToDisable);
+        
+        if (bandsToDisable.length === 0) {
+          console.log("All bands are selected, just do reset");
+          // Just reset to enable all
+          const resetCmd = 'AT^BAND_PREF_EXT';
+          console.log(`Sending reset command:`, resetCmd);
+          
+          const resetResult = await this.sendATcommand(resetCmd);
+          
+          if (!resetResult.ok) {
+            console.error("FAILED to reset bands:", this.lastErrorMessage);
+            alert(`Failed to reset bands: ${this.lastErrorMessage}`);
+            return;
           }
-        }, 1000);
-      }
-    },
-    async resetBandLocking() {
-      // Send the atcmd command to reset the locked bands
-      const atcmd = 'AT^BAND_PREF_EXT';
-
-      this.showModal = true;
-
-      const result = await this.sendATcommand(atcmd);
-
-      if (!result.ok) {
-        this.showModal = false;
-        alert(
-          this.lastErrorMessage ||
-            "Unable to restore the band lock."
-        );
-        return;
-      }
-
-      this.countdown = 5;
-      const interval = setInterval(() => {
-        this.countdown--;
-        if (this.countdown === 0) {
-          clearInterval(interval);
-          this.showModal = false;
-
-          // Refresh the page to show the updated bands
-          this.init();
-        }
-      }, 1000);
-    },
-    async resetApnSettings() {
-      const shouldReset = confirm(
-        "Resetting will delete every configured APN and restart the modem. Continue?"
-      );
-
-      if (!shouldReset) {
-        return;
-      }
-
-      this.showModal = true;
-
-      const response = await this.sendATcommand('AT+CGDCONT?');
-
-      if (!response.ok || !response.data) {
-        this.showModal = false;
-        alert(
-          this.lastErrorMessage ||
-            "Unable to read current APN profiles."
-        );
-        return;
-      }
-
-      const contexts = this.parseApnContexts(response.data);
-
-      for (const ctx of contexts) {
-        const deleteResult = await this.sendATcommand(
-          `AT+CGDCONT=${ctx.cid}`
-        );
-
-        if (!deleteResult.ok) {
-          this.showModal = false;
-          alert(
-            this.lastErrorMessage ||
-              `Unable to remove APN profile ${ctx.cid}.`
-          );
-          return;
+          
+          console.log("All bands enabled via reset");
+          
+        } else {
+          // Step 1: Reset to enable all bands
+          const resetCmd = 'AT^BAND_PREF_EXT';
+          console.log(`Step 1: Sending reset command:`, resetCmd);
+          
+          const resetResult = await this.sendATcommand(resetCmd);
+          
+          if (!resetResult.ok) {
+            console.error("FAILED to reset bands:", this.lastErrorMessage);
+            alert(`Failed to reset bands: ${this.lastErrorMessage}`);
+            return;
+          }
+          
+          console.log("Reset successful, all bands enabled");
+          
+          // Wait a bit for the modem to process the reset
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Step 2: Disable unselected bands (in chunks of 15)
+          const chunkSize = 15;
+          const chunks = [];
+          
+          for (let i = 0; i < bandsToDisable.length; i += chunkSize) {
+            chunks.push(bandsToDisable.slice(i, i + chunkSize));
+          }
+          
+          console.log(`Step 2: Disabling ${bandsToDisable.length} bands in ${chunks.length} chunk(s)`);
+          
+          for (let i = 0; i < chunks.length; i++) {
+            const bands = chunks[i].join(",");
+            const atcmd = `AT^BAND_PREF=${networkType},1,${bands}`;
+            
+            console.log(`[Disable Chunk ${i + 1}/${chunks.length}] Sending:`, atcmd);
+            console.log(`[Disable Chunk ${i + 1}/${chunks.length}] Bands:`, chunks[i]);
+            
+            const result = await this.sendATcommand(atcmd);
+            
+            if (!result.ok) {
+              console.error(`[Chunk ${i + 1}/${chunks.length}] FAILED:`, this.lastErrorMessage);
+              alert(`Failed to disable bands (chunk ${i + 1}): ${this.lastErrorMessage}`);
+              return;
+            }
+            
+            console.log(`[Chunk ${i + 1}/${chunks.length}] SUCCESS`);
+            
+            // Small delay between commands
+            if (i < chunks.length - 1) {
+              console.log(`Waiting 300ms before next chunk...`);
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          }
+          
+          console.log("All unselected bands disabled successfully");
         }
       }
 
-      const restartResult = await this.sendATcommand('AT+CFUN=1,1');
-
-      if (!restartResult.ok) {
-        this.showModal = false;
-        alert(
-          this.lastErrorMessage ||
-            "Unable to restart the modem."
-        );
-        return;
-      }
-
-      this.apn = "-";
-      this.apnIP = "-";
-      this.newApn = null;
-      this.newApnIP = null;
-
-      this.countdown = 60;
-      const interval = setInterval(() => {
-        this.countdown--;
-        if (this.countdown === 0) {
-          clearInterval(interval);
-          this.showModal = false;
-          this.init();
-        }
-      }, 1000);
+      // Update previous state
+      this.previousLockedBands = [...newCheckedValues];
+      
+      console.log("=== lockSelectedBandsAuto completed ===");
     },
     async applySimSelection() {
       if (this.isApplyingSimChange) {
@@ -794,7 +864,7 @@ function cellLocking() {
         return;
       }
 
-      this.countdown = 10;
+      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1039,9 +1109,8 @@ function cellLocking() {
         );
         return;
       }
-
-      // Do a 15 second countdown
-      this.countdown = 15;
+      // Do a 5 second countdown
+      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1085,9 +1154,8 @@ function cellLocking() {
         );
         return;
       }
-
-      // Do a 15 second countdown
-      this.countdown = 15;
+      // Do a 5 second countdown
+      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1112,7 +1180,7 @@ function cellLocking() {
         return;
       }
 
-      this.countdown = 15;
+      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1138,7 +1206,7 @@ function cellLocking() {
         return;
       }
 
-      this.countdown = 15;
+      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1175,6 +1243,31 @@ function cellLocking() {
         this.isUpdatingNr5gMode = false;
       }
     },
+    async resetBandLocking() {
+      console.log("=== resetBandLocking called ===");
+      const atcmd = 'AT^BAND_PREF_EXT';
+      
+      this.showModal = true;
+
+      const result = await this.sendATcommand(atcmd);
+
+      if (!result.ok) {
+        this.showModal = false;
+        alert(this.lastErrorMessage || "Unable to restore band lock.");
+        return;
+      }
+
+      this.countdown = 5;
+      const interval = setInterval(() => {
+        this.countdown--;
+        if (this.countdown === 0) {
+          clearInterval(interval);
+          this.showModal = false;
+          this.init();
+        }
+      }, 1000);
+      console.log("=== resetBandLocking completed ===");
+    },    
     async resetNr5gMode() {
       this.isUpdatingNr5gMode = true;
 
