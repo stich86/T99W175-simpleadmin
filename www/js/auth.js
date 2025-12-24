@@ -239,14 +239,18 @@
 
   function handleLogoutButton() {
     const logoutButton = document.getElementById("logoutButton");
-    if (!logoutButton) {
+    const logoutButtonMobile = document.getElementById("logoutButtonMobile");
+    if (!logoutButtonMobile && logoutButton) {
       return;
     }
 
-    logoutButton.addEventListener("click", (event) => {
+    const handleLogout = () => {
       event.preventDefault();
       logout();
-    });
+    };
+    
+    logoutButtonMobile.addEventListener('click', handleLogout);
+    logoutButton.addEventListener('click', handleLogout);    
   }
 
   document.addEventListener("DOMContentLoaded", () => {

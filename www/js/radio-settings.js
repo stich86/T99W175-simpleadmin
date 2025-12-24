@@ -535,7 +535,7 @@ function cellLocking() {
         const settings = parseCurrentSettings(result.data);
 
         if (!settings) {
-          throw new Error('Risposta inattesa dal modem.');
+          throw new Error('Wrong response from modem.');
         }
 
         this.sim = settings.sim;
@@ -1043,7 +1043,7 @@ function cellLocking() {
         }
       }
 
-      this.countdown = requiresBasebandRestart ? 30 : 15;
+      this.countdown = requiresBasebandRestart ? 10 : 6;
 
       const interval = setInterval(() => {
         this.countdown--;
@@ -1243,6 +1243,71 @@ function cellLocking() {
         this.isUpdatingNr5gMode = false;
       }
     },
+    async resetApnSettings() {
+      const shouldReset = confirm(
+        "Resetting will delete every configured APN and restart the modem. Continue?"
+      );
+
+      if (!shouldReset) {
+        return;
+      }
+
+      this.showModal = true;
+
+      const response = await this.sendATcommand('AT+CGDCONT?');
+
+      if (!response.ok || !response.data) {
+        this.showModal = false;
+        alert(
+          this.lastErrorMessage ||
+            "Unable to read current APN profiles."
+        );
+        return;
+      }
+
+      const contexts = this.parseApnContexts(response.data);
+
+      for (const ctx of contexts) {
+        const deleteResult = await this.sendATcommand(
+          `AT+CGDCONT=${ctx.cid}`
+        );
+
+        if (!deleteResult.ok) {
+          this.showModal = false;
+          alert(
+            this.lastErrorMessage ||
+              `Unable to remove APN profile ${ctx.cid}.`
+          );
+          return;
+        }
+      }
+
+      const restartResult = await this.sendATcommand('AT+CFUN=1,1');
+
+      if (!restartResult.ok) {
+        this.showModal = false;
+        alert(
+          this.lastErrorMessage ||
+            "Unable to restart the modem."
+        );
+        return;
+      }
+
+      this.apn = "-";
+      this.apnIP = "-";
+      this.newApn = null;
+      this.newApnIP = null;
+
+      this.countdown = 60;
+      const interval = setInterval(() => {
+        this.countdown--;
+        if (this.countdown === 0) {
+          clearInterval(interval);
+          this.showModal = false;
+          this.init();
+        }
+      }, 1000);
+    },    
     async resetBandLocking() {
       console.log("=== resetBandLocking called ===");
       const atcmd = 'AT^BAND_PREF_EXT';

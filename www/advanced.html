@@ -25,10 +25,22 @@
   <body data-require-auth="true">
     <main>
       <div class="container my-4" x-data="simpleSettings()">
-        <nav class="navbar navbar-expand-lg mt-2">
-          <div class="container-fluid">
-            <a class="navbar-brand" href="/">
-            <span class="mb-0 h4">Simple T99</span></a>
+      <nav class="navbar navbar-expand-lg mt-2">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="/">
+            <span class="mb-0 h4">Simple T99</span>
+          </a>
+          <!-- RIGHT CONTROLS (mobile + desktop) -->
+          <div class="d-flex align-items-center ms-auto gap-2">
+            <!-- Dark mode MOBILE -->
+            <button
+              id="darkModeToggleMobile"
+              class="btn btn-blink d-lg-none"
+              type="button"
+              aria-label="Toggle dark mode">
+              <span class="darkModeIcon">🌙</span>
+            </button>
+            <!-- Hamburger -->
             <button
               class="navbar-toggler"
               type="button"
@@ -36,36 +48,46 @@
               data-bs-target="#navbarText"
               aria-controls="navbarText"
               aria-expanded="false"
-              aria-label="Toggle navigation"
-              data-allow-user="true">
-            <span class="navbar-toggler-icon"></span>
+              aria-label="Toggle navigation">
+              <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse" id="navbarText">
-              <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
-                <li class="nav-item"><a class="nav-link" href="/radio-settings.html">Radio Settings</a></li>
-                <li class="nav-item"><a class="nav-link" href="/settings.html">Settings</a></li>
-                <li class="nav-item"><a class="nav-link active" href="/advanced.html">Advanced</a></li>
-                <li class="nav-item"><a class="nav-link" href="/sms.html">SMS</a></li>
-                <li class="nav-item"><a class="nav-link" href="deviceinfo.html">Device Information</a></li>
-                <li class="nav-item" id="esimNavItem" style="display: none;"><a class="nav-link" href="/esim.html">eSIM</a></li>                
-              </ul>
-              <div class="navbar-text d-flex align-items-center gap-3 flex-wrap justify-content-end">
-                <span class="badge rounded-pill fw-semibold text-uppercase d-none" id="navUserRole"></span>
-                <span class="fw-semibold" id="navUserName"></span>
-                <button
-                  id="darkModeToggle"
-                  class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center"
-                  type="button"
-                  data-allow-user="true"
-                  aria-label="Toggle dark mode">
-                  <span id="darkModeIcon">🌙</span>
-                </button>                
-                <button class="btn btn-outline-secondary btn-sm" id="logoutButton" type="button">Logout</button>
-              </div>
+            <!-- Logout MOBILE -->
+            <button
+              class="btn btn-outline-secondary btn-sm d-lg-none"
+              id="logoutButtonMobile"
+              type="button"
+              aria-label="Logout">
+              Logout
+            </button>            
+          </div>
+          <!-- COLLAPSABLE MENU -->
+          <div class="collapse navbar-collapse" id="navbarText">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+              <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
+              <li class="nav-item"><a class="nav-link" href="/radio-settings.html">Radio Settings</a></li>
+              <li class="nav-item"><a class="nav-link " href="/settings.html">System Settings</a></li>
+              <li class="nav-item"><a class="nav-link advanced" href="/advanced.html">Advanced</a></li>
+              <li class="nav-item"><a class="nav-link" href="/sms.html">SMS</a></li>
+              <li class="nav-item"><a class="nav-link" href="/deviceinfo.html">Device Information</a></li>
+              <li class="nav-item" id="esimNavItem" style="display: none;"><a class="nav-link" href="/esim.html">eSIM</a></li>                    
+            </ul>
+            <!-- DESKTOP RIGHT SIDE -->
+            <div class="navbar-text d-none d-lg-flex align-items-center gap-3">
+              <span class="badge rounded-pill fw-semibold text-uppercase" id="navUserRole"></span>
+              <span class="fw-semibold" id="navUserName"></span>
+              <button class="btn btn-outline-secondary" id="logoutButton">Logout</button>
+              <!-- Dark mode DESKTOP -->
+              <button
+                id="darkModeToggleDesktop"
+                class="btn btn-blink btn-sm"
+                type="button"
+                aria-label="Toggle dark mode">
+                <span class="darkModeIcon">🌙</span>
+              </button>
             </div>
           </div>
-        </nav>
+        </div>
+      </nav>
 
         <div class="row mt-5 mb-4">
           <div class="col">

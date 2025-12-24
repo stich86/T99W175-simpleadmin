@@ -1,17 +1,18 @@
 // Function to toggle dark mode
-const darkModeToggle = document.getElementById('darkModeToggle');
+const darkModeToggleMobile = document.getElementById('darkModeToggleMobile');
+const darkModeToggleDesktop = document.getElementById('darkModeToggleDesktop');
 
-if (darkModeToggle) {
+if (darkModeToggleMobile || darkModeToggleDesktop) {
   const html = document.documentElement;
-  const iconSpan = document.getElementById('darkModeIcon');
+  const iconSpans = document.querySelectorAll('.darkModeIcon');
 
   const applyTheme = (theme) => {
     if (theme === 'dark') {
       html.setAttribute('data-bs-theme', 'dark');
-      if (iconSpan) iconSpan.textContent = '🌙';   // dark = luna
+      iconSpans.forEach(icon => icon.textContent = '🌙');
     } else {
-      html.removeAttribute('data-bs-theme');       // light = default
-      if (iconSpan) iconSpan.textContent = '☀️';   // light = sole
+      html.removeAttribute('data-bs-theme');
+      iconSpans.forEach(icon => icon.textContent = '☀️');
     }
     localStorage.setItem('theme', theme);
   };
@@ -22,9 +23,14 @@ if (darkModeToggle) {
     applyTheme(nextTheme);
   };
 
-  // init da localStorage (default: dark)
+  // init localStorage (default: dark)
   const storedTheme = localStorage.getItem('theme') || 'dark';
   applyTheme(storedTheme);
 
-  darkModeToggle.addEventListener('click', toggleDarkMode);
+  if (darkModeToggleMobile) {
+    darkModeToggleMobile.addEventListener('click', toggleDarkMode);
+  }
+  if (darkModeToggleDesktop) {
+    darkModeToggleDesktop.addEventListener('click', toggleDarkMode);
+  }
 }

@@ -278,7 +278,7 @@ function fetchDeviceInfo() {
       if (!this.isImeiValid) {
         return;
       }
-
+      this.updateIMEI();
       this.showImeiInputModal = false;
       this.showRebootModal = true;
     },
@@ -288,11 +288,12 @@ function fetchDeviceInfo() {
       this.newImei = "";
       this.imeiValidationError = "";
       this.isImeiValid = false;
+
     },
 
     executeReboot() {
       this.showRebootModal = false;
-      this.updateIMEI();
+      this.rebootDevice();
     },
 
     processImei(imei) {
@@ -322,7 +323,6 @@ function fetchDeviceInfo() {
       this.atcmd = `AT^NV=550,${byteCount},\"${formatted}\"`;
       console.log("Sending IMEI update command:", this.atcmd);
       this.sendATCommand();
-      this.rebootDevice();
     },
 
     rebootDevice() {
