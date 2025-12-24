@@ -549,11 +549,11 @@
                   </template>
 
                   <div class="card">
-                    <div class="card-body">
+                    <div class="card-footer">
                       <div class="d-flex justify-content-between align-items-center">
-                        <p class="text-body-secondary mb-0">
+                        <small class="text-muted">
                           Saving the configuration will restart the modem to apply the changes.
-                        </p>
+                        </small>
                         <div class="d-flex gap-2">
                           <a href="/credentials.html" class="btn btn-info">Credential Management</a>                          
                           <button type="button" class="btn btn-danger" :disabled="isSaving" @click="resetForm">Reset</button>

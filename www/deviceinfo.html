@@ -166,7 +166,7 @@
                 and that doing so is legal in your jurisdiction.
               </p>
             </div>
-            <div class="d-grid gap-2 d-md-block mt-3">
+            <div class="d-flex justify-content-center gap-3 mt-3">
               <button
                 class="btn btn-primary"
                 type="button"
@@ -208,9 +208,9 @@
                 <div class="form-text" x-show="imeiValidationError" x-text="imeiValidationError" style="color: #dc3545;"></div>
               </div>
             </div>
-            <div class="d-grid gap-2 d-md-block">
+            <div class="d-flex justify-content-center gap-3 mt-3">
               <button
-                class="btn btn-danger"
+                class="btn btn-primary"
                 type="button"
                 @click="confirmImeiChange()"
                 :disabled="!isImeiValid"
