@@ -111,6 +111,7 @@ ln -s /lib/systemd/system/ttl-override.service /lib/systemd/system/multi-user.ta
 ```
 
 Then copy `ttl-override` script into `/opt/scripts/ttl/` and make it executable with `chmod +x ttl-override`
+For enable reboot schedulare, create `/persit/cron` folder
 
 
 ## Operational notes
