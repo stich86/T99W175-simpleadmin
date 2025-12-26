@@ -68,6 +68,8 @@ function cellLocking() {
     rawdata: "",
     networkModeListenerAttached: false,
     providerBandsListenerAttached: false,
+    esimManagerEnabled: false,
+    isTogglingEsim: false,
     parseApnContexts(rawData) {
       if (typeof rawData !== "string") {
         return [];
@@ -566,11 +568,88 @@ function cellLocking() {
         if (typeof describeNr5gMode === "function") {
           this.nr5gMode = describeNr5gMode(nr5gModeValue);
         }
+        // Add eSIM server enabled status
+        await this.getEsimManagerStatus();
+
       } catch (error) {
         this.lastErrorMessage = error.message || 'Error while parsing the current settings.';
         console.error('Error while parsing the current settings:', error);
       }
     },
+    async getEsimManagerStatus() {
+      try {
+        const response = await fetch('/config/simpleadmin.conf');
+        const text = await response.text();
+        const match = text.match(/SIMPLEADMIN_ENABLE_ESIM=([01])/);
+        if (match) {
+          this.esimManagerEnabled = match[1] === '1';
+        }
+      } catch (error) {
+        console.error('Failed to get eSIM manager status:', error);
+      }
+    },
+    
+    async toggleEsimManager() {
+      if (this.isTogglingEsim) {
+        event.preventDefault();
+        return;
+      }
+      
+      const targetState = this.esimManagerEnabled ? 1 : 0;
+      const actionText = targetState === 1 ? 'enable' : 'disable';
+      
+      if (!confirm(`Are you sure you want to ${actionText} the eSIM manager?`)) {
+        // Revert the checkbox
+        this.esimManagerEnabled = !this.esimManagerEnabled;
+        return;
+      }
+      
+      this.isTogglingEsim = true;
+      
+      try {
+        const response = await fetch('/cgi-bin/toggle_esim', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            enabled: targetState
+          })
+        });
+        
+        console.log('Response status:', response.status);
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('Failed to parse JSON response:', responseText);
+          throw new Error('Invalid response from server: ' + responseText);
+        }
+        
+        if (!result.ok) {
+          throw new Error(result.message || 'Failed to toggle eSIM manager');
+        }
+        
+        alert(result.message || `eSIM manager ${actionText}d successfully`);
+        
+        // Update eSIM nav item visibility
+        const esimNavItem = document.getElementById('esimNavItem');
+        if (esimNavItem) {
+          esimNavItem.style.display = targetState === 1 ? 'block' : 'none';
+        }
+        
+      } catch (error) {
+        console.error('Error toggling eSIM manager:', error);
+        alert(`Failed to ${actionText} eSIM manager: ${error.message}`);
+        // Revert the checkbox on error
+        this.esimManagerEnabled = !this.esimManagerEnabled;
+      } finally {
+        this.isTogglingEsim = false;
+      }
+    },  
     formatPreferredNetworkLabel() {
       if (this.prefNetworkValue === null) {
         return 'Fetching...';

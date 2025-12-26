@@ -8,6 +8,7 @@ function esimManager() {
     profiles: [],
     notifications: [],
     serverHealthy: null,
+    internetConnected: null,
     alert: { type: "", message: "" },
     downloadLoading: false,
     downloadForm: {
@@ -21,6 +22,12 @@ function esimManager() {
       nickname: "",
       currentNickname: "",
     },
+    serverConfig: {
+      imei: "",
+      slot: 2,
+      refresh: true,
+    },
+    isSavingServerConfig: false,    
     init() {
       this.bootstrap();
     },
@@ -68,9 +75,33 @@ function esimManager() {
         return;
       }
 
+      await this.loadServerConfig();
       await this.checkHealth();
+      await this.checkInternetConnectivity();
       await this.refreshAll();
       this.loading = false;
+    },
+    async checkInternetConnectivity() {
+      try {
+        console.debug("[eSIM] Checking internet connectivity...");
+        const response = await fetch('/cgi-bin/get_ping', {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(10000) // 10 second timeout
+        });
+        
+        const result = await response.json();
+        
+        if (result.ok && result.data && result.data.success) {
+          this.internetConnected = true;
+          console.debug("[eSIM] Internet connectivity: OK");
+        } else {
+          this.internetConnected = false;
+          console.debug("[eSIM] Internet connectivity: FAILED");
+        }
+      } catch (error) {
+        console.error("[eSIM] Error checking internet connectivity:", error);
+        this.internetConnected = false;
+      }
     },
     setAlert(type, message, autoDismiss = true) {
       this.alert.type = type;
@@ -187,6 +218,7 @@ function esimManager() {
         await this.loadProfiles();
         await this.sleep(500);
         await this.loadNotifications();
+        await this.checkInternetConnectivity();
       } catch (error) {
         console.error(error);
         this.setAlert("danger", "Error while refreshing eSIM data.", false);
@@ -405,7 +437,6 @@ function esimManager() {
         this.setAlert("danger", `Error saving nickname: ${error.message}`, false);
       }
     },
-
     openNicknameModal(profile) {
       this.nicknameModal.iccid = profile.iccid;
       this.nicknameModal.nickname = profile.profile_nickname || "";
@@ -448,7 +479,6 @@ function esimManager() {
         this.setAlert("danger", `Error saving nickname: ${error.message}`, false);
       }
     },
-    
     async downloadProfile() {
       if (!this.downloadForm.smdp || !this.downloadForm.matching_id) {
         this.setAlert("warning", "Fill in SMDP and Matching ID to download the profile.");
@@ -584,6 +614,99 @@ function esimManager() {
         this.setAlert("danger", `Error during removal: ${error.message}`, false);
       }
     },
+
+    async loadServerConfig() {
+      try {
+        const response = await fetch('/cgi-bin/get_esim_server_config', {
+          cache: 'no-store'
+        });
+        
+        const result = await response.json();
+        
+        if (!result.ok) {
+          console.warn('Failed to load server config:', result.message);
+          return;
+        }
+        
+        this.serverConfig = {
+          imei: result.data.imei || "",
+          slot: parseInt(result.data.slot) || 2,
+          refresh: result.data.refresh === true || result.data.refresh === 'true',
+        };
+        
+        console.debug('[eSIM] Server config loaded:', this.serverConfig);
+      } catch (error) {
+        console.error('[eSIM] Error loading server config:', error);
+      }
+    },
+    async openServerConfigModal() {
+      await this.loadServerConfig();
+    },
+    async saveServerConfig() {
+      if (this.isSavingServerConfig) {
+        return;
+      }
+      
+      // Validate IMEI
+      if (!/^[0-9]{15}$/.test(this.serverConfig.imei)) {
+        this.setAlert('danger', 'Invalid IMEI format. Must be 15 digits.', false);
+        return;
+      }
+      
+      // Validate slot
+      if (this.serverConfig.slot !== 1 && this.serverConfig.slot !== 2) {
+        this.setAlert('danger', 'Invalid slot. Must be 1 or 2.', false);
+        return;
+      }
+      
+      if (!confirm('This will restart the euicc-client service. Continue?')) {
+        return;
+      }
+      
+      this.isSavingServerConfig = true;
+      this.clearAlert();
+      
+      try {
+        const response = await fetch('/cgi-bin/esim_server_config', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imei: this.serverConfig.imei,
+            slot: this.serverConfig.slot,
+            refresh: this.serverConfig.refresh
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.ok) {
+          throw new Error(result.message || 'Failed to update server configuration');
+        }
+        
+        this.setAlert('success', result.message || 'Server configuration updated successfully');
+        
+        // Close modal
+        const modalEl = document.getElementById('serverConfigModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) {
+          modal.hide();
+        }
+        
+        // Wait a bit for the service to restart
+        await this.sleep(2000);
+        
+        // Refresh everything
+        await this.bootstrap();
+        
+      } catch (error) {
+        console.error('[eSIM] Error saving server config:', error);
+        this.setAlert('danger', `Failed to update configuration: ${error.message}`, false);
+      } finally {
+        this.isSavingServerConfig = false;
+      }
+    },    
   };
 }
 

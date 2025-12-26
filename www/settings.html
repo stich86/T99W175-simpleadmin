@@ -306,29 +306,45 @@
                 <div class="col-lg-6">
                   
                   <!-- Custom TTL -->
-                  <div class="card">
-                    <div class="card-header">Custom TTL</div>
-                    <div class="card-body">
-                      <p class="text-body-secondary mb-3">
-                        Set up a custom time-to-live for each outbound packet.
-                      </p>
+                <div class="card">
+                  <div class="card-header">Custom TTL</div>
+                  <div class="card-body">
 
-                      <div class="form-check form-switch mb-3">
-                        <input
-                          id="ttlEnabled"
-                          class="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                          :disabled="ttlSaving"
-                          x-model="form.ttlEnabled"
-                          @change="applyTtlImmediately"
-                        />
-                        <label class="form-check-label" for="ttlEnabled">
-                          Enable Custom TTL
-                          <span x-show="ttlSaving" class="spinner-border spinner-border-sm ms-2" role="status"></span>
-                        </label>
+                    <template x-if="ttlSuccessMessage">
+                      <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                        <span x-text="ttlSuccessMessage"></span>
+                        <button type="button" class="btn-close" @click="ttlSuccessMessage = ''"></button>
                       </div>
+                    </template>
 
+                    <template x-if="ttlErrorMessage">
+                      <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                        <span x-text="ttlErrorMessage"></span>
+                        <button type="button" class="btn-close" @click="ttlErrorMessage = ''"></button>
+                      </div>
+                    </template>
+
+                    <p class="text-body-secondary mb-3">
+                      Set up a custom time-to-live for each outbound packet.
+                    </p>
+
+                    <div class="form-check form-switch mb-3">
+                      <input
+                        id="ttlEnabled"
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        :disabled="ttlSaving"
+                        x-model="ttlForm.enabled"
+                        @change="onTTLToggle"
+                      />
+                      <label class="form-check-label" for="ttlEnabled">
+                        Enable Custom TTL
+                        <span x-show="ttlSaving" class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                      </label>
+                    </div>
+
+                    <div x-show="ttlForm.enabled">
                       <div class="row g-3 mt-1">
                         <div class="col-md-8">
                           <label class="form-label" for="ttlValue">TTL Value</label>
@@ -342,15 +358,14 @@
                               inputmode="numeric"
                               autocomplete="off"
                               placeholder="64"
-                              :disabled="ttlSaving || !form.ttlEnabled"
-                              x-model.number="form.ttlValue"
-                              @keydown.enter="applyTtlImmediately"
+                              x-model.number="ttlForm.value"
+                              @keydown.enter="applyTTL"
                             />
                             <button
                               class="btn btn-primary"
                               type="button"
-                              :disabled="ttlSaving || !form.ttlEnabled || !form.ttlValue"
-                              @click="applyTtlImmediately"
+                              :disabled="ttlSaving || !ttlForm.enabled || ttlForm.value === currentTtlSettings.value"
+                              @click="applyTTL"
                             >
                               <span x-show="!ttlSaving">Apply</span>
                               <span x-show="ttlSaving">
@@ -363,35 +378,38 @@
                           </div>
                         </div>
                       </div>
-
-                      <template x-if="ttlSuccessMessage">
-                        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
-                          <span x-text="ttlSuccessMessage"></span>
-                          <button type="button" class="btn-close" @click="ttlSuccessMessage = ''"></button>
-                        </div>
-                      </template>
-
-                      <template x-if="ttlErrorMessage">
-                        <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
-                          <span x-text="ttlErrorMessage"></span>
-                          <button type="button" class="btn-close" @click="ttlErrorMessage = ''"></button>
-                        </div>
-                      </template>
-
-                      <template x-if="form.ttlEnabled && form.ttlValue">
+                      
+                      <template x-if="ttlForm.enabled && ttlForm.value">
                         <div class="alert alert-info mt-3" role="alert">
-                          <strong>Custom TTL is applied:</strong> Packets will be sent with TTL value of <span x-text="form.ttlValue"></span>.
+                          <strong>Custom TTL is applied:</strong> Packets will be sent with TTL value of <span x-text="ttlForm.value"></span>.
                         </div>
                       </template>
+
                     </div>
                   </div>
+                </div>
 
                   <!-- Automatic Reboot -->
                   <div class="card mt-4">
                     <div class="card-header">Automatic reboot</div>
                     <div class="card-body">
+
+                      <template x-if="rebootSuccessMessage">
+                        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                          <span x-text="rebootSuccessMessage"></span>
+                          <button type="button" class="btn-close" @click="rebootSuccessMessage = ''"></button>
+                        </div>
+                      </template>
+
+                      <template x-if="rebootErrorMessage">
+                        <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                          <span x-text="rebootErrorMessage"></span>
+                          <button type="button" class="btn-close" @click="rebootErrorMessage = ''"></button>
+                        </div>
+                      </template>
+
                       <p class="text-body-secondary mb-3">
-                        Set up a scheduled reboot: the configuration is saved in a cron-compatible format and you will be able to modify or delete it later.
+                        Set up a scheduled reboot: the configuration is saved as a cron-tab job to reboot the Linux OS.
                       </p>
 
                       <div class="form-check form-switch mb-3 d-inline-flex align-items-center gap-2">
@@ -402,6 +420,10 @@
                           role="switch"
                           :disabled="rebootSaving"
                           x-model="rebootForm.enabled"
+                          @change="
+                            if (!rebootForm.enabled) {
+                              clearRebootSchedule()
+                            }"                          
                         />
                         <label class="form-check-label mb-0" for="rebootEnabled">
                           Enable automatic reboot
@@ -410,26 +432,25 @@
                       </div>
 
                       <div x-show="rebootForm.enabled">
-                        
-                      <div class="row g-3">
-                        <div class="col-md-7">
-                          <label class="form-label d-block mb-2">When?</label>
-                          <div class="btn-group mb-3" role="group" aria-label="Auto reboot options">
-                            <button type="button" class="btn"
-                                    :class="rebootForm.mode === 'interval' ? 'btn-primary' : 'btn-outline-primary'"
-                                    @click="rebootForm.mode = 'interval'"
-                                    :disabled="rebootSaving">
-                              Every X hours
-                            </button>
-                            <button type="button" class="btn"
-                                    :class="rebootForm.mode === 'schedule' ? 'btn-primary' : 'btn-outline-primary'"
-                                    @click="rebootForm.mode = 'schedule'"
-                                    :disabled="rebootSaving">
-                              Schedule
-                            </button>
+                        <div class="row g-3">
+                          <div class="col-md-7">
+                            <label class="form-label d-block mb-2">When?</label>
+                            <div class="btn-group mb-3" role="group" aria-label="Auto reboot options">
+                              <button type="button" class="btn"
+                                      :class="rebootForm.mode === 'interval' ? 'btn-primary' : 'btn-outline-primary'"
+                                      @click="rebootForm.mode = 'interval'"
+                                      :disabled="rebootSaving">
+                                Every X hours
+                              </button>
+                              <button type="button" class="btn"
+                                      :class="rebootForm.mode === 'schedule' ? 'btn-primary' : 'btn-outline-primary'"
+                                      @click="rebootForm.mode = 'schedule'"
+                                      :disabled="rebootSaving">
+                                Schedule
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
                         <div class="row g-2" x-show="rebootForm.mode === 'interval'">
                           <div class="col-md-7">
@@ -530,26 +551,13 @@
                           </div>
                         </div>
 
-                        <template x-if="rebootSuccessMessage">
-                          <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
-                            <span x-text="rebootSuccessMessage"></span>
-                            <button type="button" class="btn-close" @click="rebootSuccessMessage = ''"></button>
-                          </div>
-                        </template>
-
-                        <template x-if="rebootErrorMessage">
-                          <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
-                            <span x-text="rebootErrorMessage"></span>
-                            <button type="button" class="btn-close" @click="rebootErrorMessage = ''"></button>
-                          </div>
-                        </template>
-
                         <template x-if="rebootSchedule && rebootForm.enabled">
                           <div class="alert alert-info mt-3" role="alert">
                             <strong>Current schedule:</strong>
                             <code x-text="rebootSchedule"></code>
                           </div>
                         </template>
+
                       </div>
                     </div>
                   </div>

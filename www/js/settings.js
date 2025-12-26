@@ -12,6 +12,10 @@ document.addEventListener("alpine:init", () => {
     ttlSaving: false,
     ttlSuccessMessage: "",
     ttlErrorMessage: "",
+    ttlForm: {
+      enabled: false,
+      value: 64
+    },
     rebootSaving: false,
     rebootSuccessMessage: "",
     rebootErrorMessage: "",
@@ -50,8 +54,6 @@ document.addEventListener("alpine:init", () => {
       ipv6Enabled: true,
       bridgeEnabled: false,
       bridgeMac: "",
-      ttlEnabled: false,
-      ttlValue: null,
     },
     async init() {
       await this.fetchConfiguration();
@@ -81,8 +83,6 @@ document.addEventListener("alpine:init", () => {
       this.form.ipv6Enabled = Boolean(data.ipv6Enabled);
       this.form.bridgeEnabled = Boolean(data.bridgeEnabled);
       this.form.bridgeMac = data.bridgeMac || "";
-      this.form.ttlEnabled = this.currentTtlSettings.enabled;
-      this.form.ttlValue = this.currentTtlSettings.enabled ? this.currentTtlSettings.value : null;
       this.originalData = JSON.parse(JSON.stringify(this.form));
       this.dhcpRangeEdited = false;
     },
@@ -104,85 +104,94 @@ document.addEventListener("alpine:init", () => {
       this.form.dhcpStart = `${networkPrefix}.20`;
       this.form.dhcpEnd = `${networkPrefix}.60`;
     },
-    async applyTtlImmediately() {
-      this.ttlSuccessMessage = "";
-      this.ttlErrorMessage = "";
+    async applyTTL() {
+      this.ttlSaving = true
+      this.ttlSuccessMessage = ""
+      this.ttlErrorMessage = ""
 
-      if (!this.form.ttlEnabled) {
-        const confirmed = window.confirm(
-          "Are you sure you want to disable Custom TTL?"
-        );
-        if (!confirmed) {
-          this.form.ttlEnabled = true;
-          return;
-        }
+      if (this.ttlForm.value < 1 || this.ttlForm.value > 255) {
+        this.ttlErrorMessage = "TTL value must be between 1 and 255."
+        this.ttlSaving = false
+        return
       }
-
-      if (this.form.ttlEnabled) {
-        if (!this.form.ttlValue || this.form.ttlValue === 0) {
-          this.form.ttlValue = 64;
-        }
-
-        if (this.form.ttlValue < 1 || this.form.ttlValue > 255) {
-          this.ttlErrorMessage = "TTL value must be between 1 and 255.";
-          return;
-        }
-      }
-
-      this.ttlSaving = true;
 
       try {
-        const ttlValue = this.form.ttlEnabled ? this.form.ttlValue : 0;
-        
         const response = await fetch(
-          "/cgi-bin/set_ttl?" + new URLSearchParams({ ttlvalue: ttlValue })
-        );
-        
+          "/cgi-bin/set_ttl?" +
+            new URLSearchParams({ ttlvalue: this.ttlForm.value })
+        )
+
         if (!response.ok) {
-          throw new Error("Failed to save TTL settings");
-        }
-        
-        const result = await response.text();
-        console.log("TTL applied:", { 
-          enabled: this.form.ttlEnabled, 
-          value: ttlValue,
-          response: result 
-        });
-        
-        this.currentTtlSettings.enabled = this.form.ttlEnabled;
-        this.currentTtlSettings.value = ttlValue;
-        
-        if (this.originalData) {
-          this.originalData.ttlEnabled = this.form.ttlEnabled;
-          this.originalData.ttlValue = this.form.ttlValue;
+          throw new Error("Failed to save TTL settings")
         }
 
-        this.ttlSuccessMessage = this.form.ttlEnabled 
-          ? `Custom TTL enabled with value ${ttlValue}. Applied immediately.`
-          : "Custom TTL disabled. Applied immediately.";
+        this.currentTtlSettings.enabled = true
+        this.currentTtlSettings.value = this.ttlForm.value
+
+        this.ttlSuccessMessage =
+          `Custom TTL enabled with value ${this.ttlForm.value}. Applied immediately.`
         
+        // Auto-hide success message after 5 seconds
         setTimeout(() => {
-          this.ttlSuccessMessage = "";
-        }, 5000);
-
-      } catch (error) {
-        console.error("Error applying TTL:", error);
-        this.ttlErrorMessage = "Failed to apply TTL settings. Please try again.";
+          this.ttlSuccessMessage = ""
+        }, 5000)
+      } catch (e) {
+        this.ttlErrorMessage = "Failed to apply TTL settings."
       } finally {
-        this.ttlSaving = false;
+        this.ttlSaving = false
       }
     },
-    resetForm() {
-      if (this.originalData) {
-        this.form = JSON.parse(JSON.stringify(this.originalData));
-        this.validationErrors = [];
-        this.successMessage = "";
-        this.restartMessage = "";
-        this.dhcpRangeEdited = false;
-        this.ttlSuccessMessage = "";
-        this.ttlErrorMessage = "";
+    async disableTTL() {
+      this.ttlSaving = true
+      this.ttlSuccessMessage = ""
+      this.ttlErrorMessage = ""
+
+      try {
+        await fetch(
+          "/cgi-bin/set_ttl?" +
+            new URLSearchParams({ ttlvalue: 0 })
+        )
+
+        this.currentTtlSettings.enabled = false
+        this.currentTtlSettings.value = 0
+        this.ttlForm.value = 64
+
+        this.ttlSuccessMessage =
+          "Custom TTL disabled. Applied immediately."
+        
+        // Auto-hide success message after 5 seconds
+        setTimeout(() => {
+          this.ttlSuccessMessage = ""
+        }, 5000)
+      } catch (e) {
+        this.ttlErrorMessage = "Failed to disable TTL."
+        this.ttlForm.enabled = true // rollback UI
+      } finally {
+        this.ttlSaving = false
       }
     },
+    async onTTLToggle() {
+      if (!this.ttlForm.enabled) {
+        const confirmed = window.confirm(
+          "Are you sure you want to disable Custom TTL?"
+        )
+        if (!confirmed) {
+          this.ttlForm.enabled = true
+          return
+        }
+
+        // Disable TTL
+        await this.disableTTL()
+        return
+      }
+
+      // Enable TTL
+      if (!this.ttlForm.value) {
+        this.ttlForm.value = this.currentTtlSettings.value || 64
+      }
+
+      await this.applyTTL()
+    },    
     async fetchTtlSettings() {
       try {
         const response = await fetch("/cgi-bin/get_ttl_status");
@@ -194,16 +203,27 @@ document.addEventListener("alpine:init", () => {
         this.currentTtlSettings.enabled = data.isEnabled || false;
         this.currentTtlSettings.value = data.ttl || 0;
         
-        this.form.ttlEnabled = this.currentTtlSettings.enabled;
-        this.form.ttlValue = this.currentTtlSettings.enabled ? this.currentTtlSettings.value : null;
+        this.ttlForm.enabled = this.currentTtlSettings.enabled;
+        this.ttlForm.value = this.currentTtlSettings.enabled ? this.currentTtlSettings.value : 64;
         
         console.log("TTL settings loaded:", this.currentTtlSettings);
       } catch (error) {
         console.error("Error loading TTL settings:", error);
         this.currentTtlSettings.enabled = false;
         this.currentTtlSettings.value = 0;
-        this.form.ttlEnabled = false;
-        this.form.ttlValue = null;
+        this.ttlForm.enabled = false;
+        this.ttlForm.value = 64;
+      }
+    },    
+    resetForm() {
+      if (this.originalData) {
+        this.form = JSON.parse(JSON.stringify(this.originalData));
+        this.validationErrors = [];
+        this.successMessage = "";
+        this.restartMessage = "";
+        this.dhcpRangeEdited = false;
+        this.ttlSuccessMessage = "";
+        this.ttlErrorMessage = "";
       }
     },
     async loadRebootSchedule() {
@@ -255,12 +275,10 @@ document.addEventListener("alpine:init", () => {
           return;
         }
         
-        // Disabilita il reboot cancellando lo schedule
         await this.clearRebootSchedule();
         return;
       }
 
-      // Validazione
       const validationError = this.validateRebootForm();
       if (validationError) {
         this.rebootErrorMessage = validationError;

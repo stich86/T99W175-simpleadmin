@@ -218,11 +218,49 @@
 
                 <div x-show="activeUtilityTab === 'sim'">
                   <div class="row">
-                    <div class="col-lg-8">
-                      <p class="text-muted">
+                    <div class="col-12">
+
+                      <!-- eSIM Manager -->
+                      <div class="mb-4">
+                        <h6 class="fw-semibold mb-3">eSIM Manager</h6>
+
+                        <div class="form-check form-switch mb-2">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            id="esimManagerToggle"
+                            x-model="esimManagerEnabled"
+                            @change="toggleEsimManager($event)"
+                            :disabled="isTogglingEsim"
+                            data-requires-admin
+                          />
+                          <label class="form-check-label" for="esimManagerToggle">
+                            Enable eSIM Manager
+                          </label>
+                        </div>
+
+                        <small class="text-body-secondary">
+                          Enables the eSIM management interface and starts the eUICC service.<br>
+                          <strong class="text-warning">Note:</strong> You must have an embedded or physical eSIM installed to use this feature!
+                          <span x-show="isTogglingEsim" class="text-primary">
+                            <span
+                              class="spinner-border spinner-border-sm ms-2"
+                              role="status"
+                            ></span>
+                            Processing...
+                          </span>
+                        </small>
+                      </div>
+
+                      <div class="border-top my-4"></div>
+
+                      <!-- SIM selection -->
+                      <p class="text-muted mt-4">
                         Currently active SIM:
                         <span class="fw-semibold" x-text="formatActiveSimLabel()"></span>
                       </p>
+
                       <div class="form-check mb-2">
                         <input
                           class="form-check-input"
@@ -237,6 +275,7 @@
                           SIM 1
                         </label>
                       </div>
+
                       <div class="form-check mb-2">
                         <input
                           class="form-check-input"
@@ -251,11 +290,14 @@
                           SIM 2 / eSIM
                         </label>
                       </div>
-                      <small class="text-body-secondary"
-                        >Select the SIM to use and press "Apply" to confirm.</small
-                      >
+
+                      <small class="text-body-secondary">
+                        Select the SIM to use and press "Apply" to confirm.
+                      </small>
+
                     </div>
                   </div>
+
                 </div>
               </div>
               <div class="card-footer d-flex justify-content-end gap-2">
