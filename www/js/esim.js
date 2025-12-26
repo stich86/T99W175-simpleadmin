@@ -86,17 +86,19 @@ function esimManager() {
         console.debug("[eSIM] Checking internet connectivity...");
         const response = await fetch('/cgi-bin/get_ping', {
           cache: 'no-store',
-          signal: AbortSignal.timeout(10000) // 10 second timeout
+          signal: AbortSignal.timeout(5000) // 5 second timeout
         });
         
-        const result = await response.json();
+        const text = await response.text();
+        console.debug("[eSIM] Ping response:", text);
         
-        if (result.ok && result.data && result.data.success) {
+        // The script returns "OK" or "ERROR" as plain text
+        if (text.trim() === 'OK') {
           this.internetConnected = true;
           console.debug("[eSIM] Internet connectivity: OK");
         } else {
           this.internetConnected = false;
-          console.debug("[eSIM] Internet connectivity: FAILED");
+          console.debug("[eSIM] Internet connectivity: FAILED -", text.trim());
         }
       } catch (error) {
         console.error("[eSIM] Error checking internet connectivity:", error);
