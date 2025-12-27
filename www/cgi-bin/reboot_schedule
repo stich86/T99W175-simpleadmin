@@ -7,35 +7,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SCHEDULE_FILE="/persist/cron/root"
 
+# JSON escape helper
 json_escape() {
     local str="$1"
-    # Escape backslashes first
     str="${str//\\/\\\\}"
-    # Escape double quotes
     str="${str//\"/\\\"}"
-    # Escape newlines
     str="${str//$'\n'/\\n}"
-    # Escape carriage returns
     str="${str//$'\r'/\\r}"
-    # Escape tabs
     str="${str//$'\t'/\\t}"
     printf '"%s"' "$str"
 }
 
-send_json() {
-    local status="$1"
-    local payload="$2"
-    printf 'Status: %s\r\n' "$status"
-    printf 'Content-type: application/json\r\n\r\n'
-    printf '%s\n' "$payload"
-    exit 0
-}
-
+# URL decode helper
 url_decode() {
     local data="${1//+/ }"
     printf '%b' "${data//%/\\x}"
 }
 
+# Parse query string or POST data
 parse_params() {
     local qs="$1"
     schedule=""
@@ -54,16 +43,18 @@ parse_params() {
     done
 }
 
-ensure_auth() {
-    if ! session_load; then
-        send_json "401 Unauthorized" '{"success":false,"message":"Authentication required"}'
-    fi
+# Authentication check
+if ! session_load; then
+    send_json_response 401 '{"success":false,"message":"Authentication required"}'
+    exit 0
+fi
 
-    if ! session_require_role "admin"; then
-        send_json "403 Forbidden" '{"success":false,"message":"Admin privileges required"}'
-    fi
-}
+if ! session_require_role "admin"; then
+    send_json_response 403 '{"success":false,"message":"Admin privileges required"}'
+    exit 0
+fi
 
+# Read current schedule from file
 read_schedule_file() {
     if [ -f "$SCHEDULE_FILE" ]; then
         schedule=$(grep -v '^\s*$' "$SCHEDULE_FILE" | head -n1)
@@ -72,16 +63,18 @@ read_schedule_file() {
     fi
 }
 
+# Save schedule to file
 save_schedule() {
     local schedule_line="$1"
     mkdir -p "$(dirname "$SCHEDULE_FILE")"
     printf '%s\n' "$schedule_line" > "$SCHEDULE_FILE"
 }
 
+# Validate cron schedule format
 validate_schedule() {
     local line="$1"
     
-    # If string is empty, retunr
+    # Empty string is valid (means no schedule)
     if [ -z "$line" ]; then
         return 0
     fi
@@ -90,17 +83,29 @@ validate_schedule() {
     field_count=$(echo "$line" | awk '{print NF}')
 
     if [ "$field_count" -lt 5 ]; then
-        send_json "400 Bad Request" '{"success":false,"message":"Invalid cron format. Expect at least 5 fields (minute hour day month weekday)."}'
+        send_json_response 400 '{"success":false,"message":"Invalid cron format. Expect at least 5 fields (minute hour day month weekday)."}'
+        exit 1
     fi
 }
 
+# Handle GET request
 handle_get() {
     read_schedule_file
     local schedule_json
     schedule_json=$(json_escape "$schedule")
-    send_json "200 OK" "{\"success\":true,\"schedule\":${schedule_json}}"
+    
+    local payload
+    payload=$(cat <<EOF
+{
+  "success":true,
+  "schedule":${schedule_json}
+}
+EOF
+)
+    send_json_response 200 "$payload"
 }
 
+# Handle POST/DELETE request
 handle_post() {
     if [ -n "${CONTENT_LENGTH:-}" ]; then
         read -r -n "$CONTENT_LENGTH" POST_DATA
@@ -110,11 +115,11 @@ handle_post() {
     
     parse_params "$POST_DATA"
 
-    # If action is delete or file doesn't exsist response 200 OK
+    # If action is delete or schedule is empty, remove the file
     if [ "$action" = "delete" ] || [ -z "${schedule// }" ]; then
         rm -f "$SCHEDULE_FILE"
-        send_json "200 OK" '{"success":true,"schedule":""}'
-        
+        send_json_response 200 '{"success":true,"schedule":""}'
+        exit 0
     fi
 
     # Validate and save schedule
@@ -123,11 +128,19 @@ handle_post() {
     
     local schedule_json
     schedule_json=$(json_escape "$schedule")
-    send_json "200 OK" "{\"success\":true,\"schedule\":${schedule_json}}"
+    
+    local payload
+    payload=$(cat <<EOF
+{
+  "success":true,
+  "schedule":${schedule_json}
+}
+EOF
+)
+    send_json_response 200 "$payload"
 }
 
-ensure_auth
-
+# Route based on request method
 case "$REQUEST_METHOD" in
     GET)
         handle_get
@@ -140,6 +153,6 @@ case "$REQUEST_METHOD" in
         handle_post
         ;;
     *)
-        send_json "405 Method Not Allowed" '{"success":false,"message":"Unsupported method"}'
+        send_json_response 405 '{"success":false,"message":"Unsupported method"}'
         ;;
 esac

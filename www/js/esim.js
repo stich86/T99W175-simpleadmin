@@ -89,16 +89,15 @@ function esimManager() {
           signal: AbortSignal.timeout(5000) // 5 second timeout
         });
         
-        const text = await response.text();
-        console.debug("[eSIM] Ping response:", text);
+        const data = await response.json();
+        console.debug("[eSIM] Ping response:", data);
         
-        // The script returns "OK" or "ERROR" as plain text
-        if (text.trim() === 'OK') {
+        if (data.connected === true || data.status === 'ok') {
           this.internetConnected = true;
           console.debug("[eSIM] Internet connectivity: OK");
         } else {
           this.internetConnected = false;
-          console.debug("[eSIM] Internet connectivity: FAILED -", text.trim());
+          console.debug("[eSIM] Internet connectivity: FAILED -", data.message || data.status);
         }
       } catch (error) {
         console.error("[eSIM] Error checking internet connectivity:", error);

@@ -85,13 +85,24 @@ return {
 
     try {
         const response = await fetch(url);
+        
         if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const data = await response.text();
-        this.atCommandResponse = data;
+        
+        const data = await response.json();
+        
+        if (data.success) {
+        // Display output directly (already formatted)
+        this.atCommandResponse = data.output;
         this.showError = false;
         this.isClean = false;
+        } else {
+        // Show error message
+        this.atCommandResponse = `ERROR: ${data.message}`;
+        this.showError = true;
+        }
+        
     } catch (error) {
         this.handleAtError(
         error.message || "Network error while executing the custom command."

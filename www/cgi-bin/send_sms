@@ -104,49 +104,49 @@ send_sms_interactive() {
     
     # Create expect-like script
     cat << EOF | sh
-#!/bin/sh
-exec 3<>/dev/smd8
-stty -F /dev/smd8 115200 cs8 -cstopb -parenb -echo raw 2>/dev/null
+    #!/bin/sh
+    exec 3<>/dev/smd8
+    stty -F /dev/smd8 115200 cs8 -cstopb -parenb -echo raw 2>/dev/null
 
-# Clear buffer
-timeout 0.5 cat <&3 >/dev/null 2>&1
+    # Clear buffer
+    timeout 0.5 cat <&3 >/dev/null 2>&1
 
-# Initialize
-echo -e "AT+CMGF=1\r" >&3
-sleep 0.5
-timeout 1 cat <&3 2>&1
+    # Initialize
+    echo -e "AT+CMGF=1\r" >&3
+    sleep 0.5
+    timeout 1 cat <&3 2>&1
 
-echo -e "AT+CSCS=\"UCS2\"\r" >&3
-sleep 0.5
-timeout 1 cat <&3 2>&1
+    echo -e "AT+CSCS=\"UCS2\"\r" >&3
+    sleep 0.5
+    timeout 1 cat <&3 2>&1
 
-echo -e "AT+CSMP=17,167,0,8\r" >&3
-sleep 0.5
-timeout 1 cat <&3 2>&1
+    echo -e "AT+CSMP=17,167,0,8\r" >&3
+    sleep 0.5
+    timeout 1 cat <&3 2>&1
 
-# Send CMGS
-echo -e "AT+CMGS=\"${phone}\"\r" >&3
-sleep 1
+    # Send CMGS
+    echo -e "AT+CMGS=\"${phone}\"\r" >&3
+    sleep 1
 
-# Read until we get >
-while IFS= read -r -t 2 -u 3 line; do
-    echo "\$line"
-    if echo "\$line" | grep -q ">"; then
-        break
-    fi
-done
+    # Read until we get >
+    while IFS= read -r -t 2 -u 3 line; do
+        echo "\$line"
+        if echo "\$line" | grep -q ">"; then
+            break
+        fi
+    done
 
-# Send message + Ctrl+Z
-echo -en "${msg}\x1A" >&3
-sleep 3
+    # Send message + Ctrl+Z
+    echo -en "${msg}\x1A" >&3
+    sleep 3
 
-# Read response
-timeout 5 cat <&3 2>&1
+    # Read response
+    timeout 5 cat <&3 2>&1
 
-exec 3>&-
-exec 3<&-
-EOF
-}
+    exec 3>&-
+    exec 3<&-
+    EOF
+    }
 
 # Method using named pipes for better control
 send_sms_pipe() {

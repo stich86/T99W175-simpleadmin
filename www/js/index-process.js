@@ -1277,13 +1277,17 @@ console.log(bandwidth_5gs)
 
   requestPing() {
     return fetch("/cgi-bin/get_ping")
-      .then((response) => response.text())
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
       .then((data) => {
         return data;
       })
       .catch((error) => {
         console.error("Error:", error);
-        // Throw the error again to ensure it's propagated
         throw error;
       });
   },
@@ -1451,155 +1455,52 @@ console.log(bandwidth_5gs)
   },
 
   fetchUpTime() {
-    // Content-Type: text/plain
-    //
-    // 1 hour 44, minute
     fetch("/cgi-bin/get_uptime")
-      .then((response) => response.text())
-      .then((data) => {
-        // Example result
-        // 01:17:02 up 3 days,  2:41,  load average: 0.65, 0.66, 0.60
-
-        // Look for xx days in the result
-        const days = data.match(/(\d+) day/);
-        // Do the same for hours
-        const hours = data.match(/(\d+) hour/);
-        // Do the same for minutes
-        const minutes = data.match(/(\d+) min/);
-        // 2:41
-        const hoursAndMinutes = data.match(/(\d+):(\d+),/);
-
-        if (hoursAndMinutes != null) {
-          if (days != null) {
-            if (days[1] === "1") {
-              if (hoursAndMinutes[1] === "1") {
-                this.uptime =
-                  days[1] +
-                  " day, " +
-                  hoursAndMinutes[1] +
-                  " hour " +
-                  hoursAndMinutes[2] +
-                  " minutes";
-              } else if (hoursAndMinutes[2] === 1) {
-                this.uptime =
-                  days[1] +
-                  " day, " +
-                  hoursAndMinutes[1] +
-                  " hours " +
-                  hoursAndMinutes[2] +
-                  " minute";
-              } else {
-                this.uptime =
-                  days[1] +
-                  " day, " +
-                  hoursAndMinutes[1] +
-                  " hours " +
-                  hoursAndMinutes[2] +
-                  " minutes";
-              }
-            } else {
-              if (hoursAndMinutes[1] === "1") {
-                this.uptime =
-                  days[1] +
-                  " days, " +
-                  hoursAndMinutes[1] +
-                  " hour " +
-                  hoursAndMinutes[2] +
-                  " minutes";
-              } else if (hoursAndMinutes[2] === 1) {
-                this.uptime =
-                  days[1] +
-                  " days, " +
-                  hoursAndMinutes[1] +
-                  " hours " +
-                  hoursAndMinutes[2] +
-                  " minute";
-              } else {
-                this.uptime =
-                  days[1] +
-                  " days, " +
-                  hoursAndMinutes[1] +
-                  " hours " +
-                  hoursAndMinutes[2] +
-                  " minutes";
-              }
-            }
-          } else {
-            if (hoursAndMinutes[1] === "1") {
-              this.uptime =
-                hoursAndMinutes[1] +
-                " hour " +
-                hoursAndMinutes[2] +
-                " minutes";
-            } else if (hoursAndMinutes[2] === 1) {
-              this.uptime =
-                hoursAndMinutes[1] +
-                " hours " +
-                hoursAndMinutes[2] +
-                " minute";
-            } else {
-              this.uptime =
-                hoursAndMinutes[1] +
-                " hours " +
-                hoursAndMinutes[2] +
-                " minutes";
-            }
-          }
-        } else if (days != null) {
-          if (hours != null) {
-            if (days[1] === "1") {
-              if (hours[1] === "1") {
-                this.uptime = days[1] + " day, " + hours[1] + " hour";
-              } else {
-                this.uptime = days[1] + " day, " + hours[1] + " hours";
-              }
-            } else {
-              if (hours[1] === "1") {
-                this.uptime = days[1] + " days, " + hours[1] + " hour";
-              } else {
-                this.uptime = days[1] + " days, " + hours[1] + " hours";
-              }
-            }
-          } else if (minutes != null) {
-            if (days[1] === "1") {
-              if (minutes[1] === "1") {
-                this.uptime =
-                  days[1] + " day, " + minutes[1] + " minute";
-              } else {
-                this.uptime =
-                  days[1] + " day, " + minutes[1] + " minutes";
-              }
-            } else {
-              if (minutes[1] === "1") {
-                this.uptime =
-                  days[1] + " days, " + minutes[1] + " minute";
-              } else {
-                this.uptime =
-                  days[1] + " days, " + minutes[1] + " minutes";
-              }
-            }
-          } else {
-            if (days[1] === "1") {
-              this.uptime = days[1] + " day";
-            } else {
-              this.uptime = days[1] + " days";
-            }
-          }
-        } else if (hours != null) {
-          if (hours[1] === "1") {
-            this.uptime = hours[1] + " hour";
-          } else {
-            this.uptime = hours[1] + " hours";
-          }
-        } else if (minutes != null) {
-          if (minutes[1] === "1") {
-            this.uptime = minutes[1] + " minute";
-          } else {
-            this.uptime = minutes[1] + " minutes";
-          }
-        } else {
-          this.uptime = "Unknown Time";
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+        return response.json();
+      })
+      .then((data) => {
+        if (data.status !== 'ok') {
+          this.uptime = "Unknown Time";
+          return;
+        }
+
+        const { days, hours, minutes } = data;
+        const parts = [];
+
+        // Format days
+        if (days > 0) {
+          parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
+        }
+
+        // Format hours
+        if (hours > 0) {
+          parts.push(`${hours} ${hours === 1 ? 'hour' : 'hours'}`);
+        }
+
+        // Format minutes
+        if (minutes > 0) {
+          parts.push(`${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
+        }
+
+        // Join with commas and spaces
+        if (parts.length === 0) {
+          this.uptime = "Less than 1 minute";
+        } else if (parts.length === 1) {
+          this.uptime = parts[0];
+        } else if (parts.length === 2) {
+          this.uptime = parts.join(', ');
+        } else {
+          // For 3 parts (days, hours, minutes)
+          this.uptime = parts[0] + ', ' + parts[1] + ' ' + parts[2];
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching uptime:", error);
+        this.uptime = "Unknown Time";
       });
   },
 
@@ -1639,9 +1540,7 @@ console.log(bandwidth_5gs)
 
     this.requestPing()
       .then((data) => {
-        const response = data.trim();
-        // Trim any leading/trailing spaces
-        if (response === "OK") {
+        if (data.connected === true || data.status === 'ok') {
           this.internetConnectionStatus = "Connected";
         } else {
           this.internetConnectionStatus = "Disconnected";
@@ -1663,17 +1562,15 @@ console.log(bandwidth_5gs)
 
       this.requestPing()
         .then((data) => {
-          const response = data.trim();
-          // Trim any leading/trailing spaces
-          if (response === "OK") {
-            this.internetConnection = "Connected";
+          if (data.connected === true || data.status === 'ok') {
+            this.internetConnectionStatus = "Connected";
           } else {
-            this.internetConnection = "Disconnected";
+            this.internetConnectionStatus = "Disconnected";
           }
         })
         .catch((error) => {
           console.error("Error:", error);
-          this.internetConnection = "Disconnected";
+          this.internetConnectionStatus = "Disconnected";
         });
 
       this.lastUpdate = new Date().toLocaleString();

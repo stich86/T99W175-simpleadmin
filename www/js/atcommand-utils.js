@@ -7,7 +7,6 @@
     if (typeof atcmd !== "string") {
       return "";
     }
-
     return atcmd.trim();
   }
 
@@ -15,7 +14,6 @@
     if (typeof text !== "string") {
       return [];
     }
-
     return text
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -26,7 +24,6 @@
     if (!text) {
       return false;
     }
-
     return BUSY_PATTERNS.some((pattern) => pattern.test(text));
   }
 
@@ -63,13 +60,13 @@
       ? options.endpoint.trim()
       : "/cgi-bin/get_atcommand";
 
-    let attempt = 0;
+    let clientAttempt = 0;
     let lastError = null;
     let lastData = "";
     let busy = false;
 
-    while (attempt <= retries) {
-      attempt += 1;
+    while (clientAttempt <= retries) {
+      clientAttempt += 1;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeout);
 
@@ -79,44 +76,74 @@
           { signal: controller.signal }
         );
 
+        clearTimeout(timer);
+
         if (!response.ok) {
           lastError = new Error(`HTTP ${response.status}`);
-        } else {
-          const text = await response.text();
-          lastData = text;
+          continue;
+        }
 
-          if (!text.trim()) {
-            lastError = new Error("Empty response from the modem.");
-          } else if (isBusyResponse(text)) {
-            busy = true;
-            lastError = new Error("The modem is busy. Try again later.");
-          } else {
-            const hasErrorToken = text.includes("ERROR");
-
-            return createResult(!hasErrorToken, text, hasErrorToken ? new Error("The modem returned ERROR.") : null, {
+        const json = await response.json();
+        
+        // The server already handles retries (5 attempts), so we use server's attempt count
+        const serverAttempts = json.attempts || 1;
+        
+        if (json.success) {
+          lastData = json.output || "";
+          
+          // Check if output contains ERROR token (modem-level error)
+          const hasErrorToken = json.has_error || false;
+          
+          return createResult(
+            !hasErrorToken, 
+            lastData, 
+            hasErrorToken ? new Error("The modem returned ERROR.") : null, 
+            {
               busy: false,
-              attempts: attempt,
+              attempts: serverAttempts,
+              command: json.command,
+            }
+          );
+        } else {
+          // Server reported failure
+          lastData = json.output || "";
+          busy = json.busy || false;
+          
+          if (busy) {
+            lastError = new Error(json.message || "The modem is busy. Try again later.");
+          } else {
+            lastError = new Error(json.message || "Command execution failed.");
+          }
+          
+          // If server already retried and failed, respect that
+          if (serverAttempts >= 5 || !busy) {
+            return createResult(false, lastData, lastError, {
+              busy,
+              attempts: serverAttempts,
+              command: json.command,
             });
           }
         }
+
       } catch (error) {
+        clearTimeout(timer);
+        
         if (error.name === "AbortError") {
           lastError = new Error("AT request timed out.");
         } else {
           lastError = error;
         }
-      } finally {
-        clearTimeout(timer);
       }
 
-      if (attempt <= retries) {
-        await delay(Math.min(2000, 500 * attempt));
+      // Client-side retry with backoff
+      if (clientAttempt <= retries) {
+        await delay(Math.min(2000, 500 * clientAttempt));
       }
     }
 
     return createResult(false, lastData, lastError, {
       busy,
-      attempts: attempt,
+      attempts: clientAttempt,
     });
   }
 

@@ -6,18 +6,46 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/session_utils.sh"
 
 if ! session_load; then
-    printf 'Status: 401 Unauthorized\r\n'
-    printf 'Content-type: text/plain\r\n\r\n'
-    printf 'Authentication required\n'
+    send_json_response 401 '{"status":"error","message":"Authentication required"}'
     exit 0
 fi
 
-# Execute the uptime command and store the result
+# Execute the uptime command and parse the result
 uptime_output=$(uptime)
 
-# Set header for plain text content
-echo "Content-Type: text/plain"
-echo ""
+# Parse uptime components
+days=0
+hours=0
+minutes=0
 
-# Output the uptime result
-echo "$uptime_output"
+# Extract days (e.g., "3 days")
+if [[ $uptime_output =~ ([0-9]+)\ day ]]; then
+    days=${BASH_REMATCH[1]}
+fi
+
+# Extract hours and minutes (e.g., "2:41")
+if [[ $uptime_output =~ ([0-9]+):([0-9]+), ]]; then
+    hours=${BASH_REMATCH[1]}
+    minutes=${BASH_REMATCH[2]}
+fi
+
+# Extract load average
+load_avg=""
+if [[ $uptime_output =~ load\ average:\ ([0-9.]+,\ [0-9.]+,\ [0-9.]+) ]]; then
+    load_avg=${BASH_REMATCH[1]}
+fi
+
+# Build JSON payload
+json_payload=$(cat <<EOF
+{
+  "status":"ok",
+  "days":${days},
+  "hours":${hours},
+  "minutes":${minutes},
+  "load_average":"${load_avg}",
+  "raw":"${uptime_output}"
+}
+EOF
+)
+
+send_json_response 200 "$json_payload"
