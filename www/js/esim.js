@@ -1,6 +1,6 @@
 function esimManager() {
   return {
-    loading: true,
+    isLoading: true,
     enabled: false,
     baseUrl: "",
     fallbackBaseUrl: "",
@@ -38,7 +38,7 @@ function esimManager() {
       }
       this._bootstrapped = true;
 
-      this.loading = true;
+      this.isLoading = true;
       this.clearAlert();
       console.debug("[eSIM] Starting eSIM management bootstrap...");
 
@@ -71,7 +71,7 @@ function esimManager() {
           "warning",
           "eSIM management is disabled. Enable it in config/simpleadmin.conf to proceed."
         );
-        this.loading = false;
+        this.isLoading = false;
         return;
       }
 
@@ -79,7 +79,7 @@ function esimManager() {
       await this.checkHealth();
       await this.checkInternetConnectivity();
       await this.refreshAll();
-      this.loading = false;
+      this.isLoading = false;
     },
     async checkInternetConnectivity() {
       try {

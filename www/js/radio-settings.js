@@ -784,24 +784,47 @@ function cellLocking() {
       console.log(`All available bands for ${selectedMode}:`, allBands);
       console.log(`Selected bands: ${newCheckedValues.length}/${allBands.length}`);
 
+      // Map selectedMode to the correct AT command network type
       let networkType;
+      let atCommandPrefix;
+      
       if (selectedMode === "LTE") {
         networkType = "LTE";
-      } else if (selectedMode === "NSA" || selectedMode === "SA") {
+        atCommandPrefix = "LTE";
+      } else if (selectedMode === "NSA") {
         networkType = "NR5G";
+        atCommandPrefix = "NR5G_NSA";
+      } else if (selectedMode === "SA") {
+        networkType = "NR5G";
+        atCommandPrefix = "NR5G_SA";        
       } else {
         console.warn("ABORT: Invalid network mode:", selectedMode);
         return;
       }
 
-      // STRATEGY 1: If 15 or fewer bands selected, send single enable command
-      if (newCheckedValues.length <= 15) {
-        console.log("Strategy: Single enable command (≤15 bands)");
+      // Check if all bands are selected
+      const allBandsSelected = newCheckedValues.length === allBands.length;
+      
+      if (allBandsSelected) {
+        console.log("All bands selected - sending reset command");
+        const resetCmd = 'AT^BAND_PREF_EXT';
+        console.log(`Sending:`, resetCmd);
         
-        const bands = newCheckedValues.join(",");
-        const atcmd = `AT^BAND_PREF=${networkType},2,${bands}`;
+        const resetResult = await this.sendATcommand(resetCmd);
         
-        console.log(`Sending enable command:`, atcmd);
+        if (!resetResult.ok) {
+          console.error("FAILED to reset bands:", this.lastErrorMessage);
+          alert(`Failed to reset bands: ${this.lastErrorMessage}`);
+          return;
+        }
+        
+        console.log("All bands enabled via reset");
+      } else {
+        // Use colon-separated format to send all bands at once
+        const bands = newCheckedValues.join(":");
+        const atcmd = `AT^BAND_PREF_EXT=${atCommandPrefix},2,${bands}`;
+        
+        console.log(`Sending enable command with ${newCheckedValues.length} bands:`, atcmd);
         
         const result = await this.sendATcommand(atcmd);
         
@@ -812,89 +835,6 @@ function cellLocking() {
         }
         
         console.log("Bands enabled successfully");
-        
-      } else {
-        // STRATEGY 2: More than 15 bands selected
-        // Step 1: Reset to enable all bands
-        // Step 2: Disable the unselected bands
-        
-        console.log("Strategy: Reset + Disable unselected (>15 bands)");
-        
-        // Calculate which bands to disable (all bands - selected bands)
-        const bandsToDisable = allBands.filter(band => !newCheckedValues.includes(band));
-        
-        console.log(`Bands to disable: ${bandsToDisable.length}`, bandsToDisable);
-        
-        if (bandsToDisable.length === 0) {
-          console.log("All bands are selected, just do reset");
-          // Just reset to enable all
-          const resetCmd = 'AT^BAND_PREF_EXT';
-          console.log(`Sending reset command:`, resetCmd);
-          
-          const resetResult = await this.sendATcommand(resetCmd);
-          
-          if (!resetResult.ok) {
-            console.error("FAILED to reset bands:", this.lastErrorMessage);
-            alert(`Failed to reset bands: ${this.lastErrorMessage}`);
-            return;
-          }
-          
-          console.log("All bands enabled via reset");
-          
-        } else {
-          // Step 1: Reset to enable all bands
-          const resetCmd = 'AT^BAND_PREF_EXT';
-          console.log(`Step 1: Sending reset command:`, resetCmd);
-          
-          const resetResult = await this.sendATcommand(resetCmd);
-          
-          if (!resetResult.ok) {
-            console.error("FAILED to reset bands:", this.lastErrorMessage);
-            alert(`Failed to reset bands: ${this.lastErrorMessage}`);
-            return;
-          }
-          
-          console.log("Reset successful, all bands enabled");
-          
-          // Wait a bit for the modem to process the reset
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // Step 2: Disable unselected bands (in chunks of 15)
-          const chunkSize = 15;
-          const chunks = [];
-          
-          for (let i = 0; i < bandsToDisable.length; i += chunkSize) {
-            chunks.push(bandsToDisable.slice(i, i + chunkSize));
-          }
-          
-          console.log(`Step 2: Disabling ${bandsToDisable.length} bands in ${chunks.length} chunk(s)`);
-          
-          for (let i = 0; i < chunks.length; i++) {
-            const bands = chunks[i].join(",");
-            const atcmd = `AT^BAND_PREF=${networkType},1,${bands}`;
-            
-            console.log(`[Disable Chunk ${i + 1}/${chunks.length}] Sending:`, atcmd);
-            console.log(`[Disable Chunk ${i + 1}/${chunks.length}] Bands:`, chunks[i]);
-            
-            const result = await this.sendATcommand(atcmd);
-            
-            if (!result.ok) {
-              console.error(`[Chunk ${i + 1}/${chunks.length}] FAILED:`, this.lastErrorMessage);
-              alert(`Failed to disable bands (chunk ${i + 1}): ${this.lastErrorMessage}`);
-              return;
-            }
-            
-            console.log(`[Chunk ${i + 1}/${chunks.length}] SUCCESS`);
-            
-            // Small delay between commands
-            if (i < chunks.length - 1) {
-              console.log(`Waiting 300ms before next chunk...`);
-              await new Promise(resolve => setTimeout(resolve, 300));
-            }
-          }
-          
-          console.log("All unselected bands disabled successfully");
-        }
       }
 
       // Update previous state

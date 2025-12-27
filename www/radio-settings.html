@@ -129,7 +129,7 @@
                 <div class="d-flex align-items-center justify-content-between">
                   <small class="text-muted">
                     To enable or disable bands, click the corresponding checkbox.
-                    Changes are applied automatically.
+                    Changes are applied automatically after 1.5s.
                   </small>
                   <button
                     type="button"
@@ -378,15 +378,14 @@
                   >Leave all options unchecked to enable Auto mode (value 0).</small
                 >
               </div>
-              <div class="card-footer d-flex justify-content-center">
+              <div class="card-footer d-flex justify-content-end">
                 <button
                   type="button"
                   class="btn btn-primary"
                   @click="savePreferredNetwork()"
                   :disabled="isSavingPrefNetwork || prefNetworkValue === null"
                   data-requires-admin
-                >
-                  Save Preferred Network
+                >Apply
                 </button>
               </div>
             </div>
@@ -572,6 +571,7 @@
             </div>
           </div>
         </div>
+
         <!-- Loading Modal for Locking Band -->
         <div class="modal-overlay" x-show="showModal">
           <div class="loading-modal">
@@ -580,7 +580,7 @@
               class="loading-text"
               style="display: flex; flex-direction: column"
             >
-              <h3>Initializing Network...</h3>
+              <h3>Reset bands to default...</h3>
               <p style="margin-top: 0.5rem">
                 Please wait for
                 <span x-text="countdown" style="font-weight: 500"></span>
@@ -589,6 +589,7 @@
             </div>
           </div>
         </div>
+
       </div>
     </main>
   </body>

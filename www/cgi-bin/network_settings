@@ -127,11 +127,11 @@ set_xml_value() {
     local file="$3"
 
     if grep -q "<$key>" "$file"; then
-        if ! sed "0,/<$key>/{s|<$key>.*</$key>|<$key>$value</$key>|}" "$file" > "$TMP_FILE"; then
+        if ! sed "s|<$key>[^<]*</$key>|<$key>$value</$key>|" "$file" > "$TMP_FILE"; then
             return 1
         fi
     elif grep -Eq "<$key[[:space:]]*/>" "$file"; then
-        if ! sed "0,/<$key[[:space:]]*\/>/{s|<$key[[:space:]]*\/>|<$key>$value</$key>|}" "$file" > "$TMP_FILE"; then
+        if ! sed "s|<$key[[:space:]]*/>|<$key>$value</$key>|" "$file" > "$TMP_FILE"; then
             return 1
         fi
     else
@@ -143,6 +143,7 @@ set_xml_value() {
         return 1
     fi
 
+    sync
     rm -f "$TMP_FILE"
 
     return 0
@@ -182,6 +183,7 @@ set_scoped_xml_value() {
         return 1
     fi
 
+    sync
     rm -f "$TMP_FILE"
 
     return 0
