@@ -460,10 +460,10 @@ function cellLocking() {
         self.selectedBandsCount = newCheckedValues.length;
         
         clearTimeout(self.bandLockTimeout);
-        console.log("Setting timeout for lockSelectedBandsAuto (800ms)...");
+        console.log("Setting timeout for lockSelectedBandsAuto (1500ms)...");
         self.bandLockTimeout = setTimeout(() => {
           self.lockSelectedBandsAuto();
-        }, 800);
+        }, 1500);
         console.log(">>> trackCheckboxChanges END <<<");
       };
 
