@@ -1,8 +1,11 @@
 function cellLocking() {
   return {
     isLoading: false,
-    showModal: false,
-    countdown: 0,
+    showModalCellLock: false,
+    showModalBand: false,
+    showModalSim: false,
+    showModalAPN: false,
+    countdown: 5,
     lastErrorMessage: "",
     activeUtilityTab: "apn",
     networkModeCell: "-",
@@ -193,7 +196,7 @@ function cellLocking() {
       if (this.sim === "2") {
         return "SIM 2 / eSIM";
       }
-      return "Sconosciuta";
+      return "Unknown";
     },
 
     async getSupportedBands() {
@@ -522,9 +525,67 @@ function cellLocking() {
       addProviderBandsListener();
       console.log("=== init() completed ===");
     },
+
     async getCurrentSettings() {
+      console.log("=== getCurrentSettings START ===");
+       
+      // Always get the slot info and network mode, regardless of SIM status
+      const basicCmd = 'AT^SWITCH_SLOT?;^SLMODE?';
+      const basicResult = await this.sendATcommand(basicCmd);
+
+      if (basicResult.ok && basicResult.data) {       
+        // Parse slot: "SIM1 ENABLE" or "SIM2 ENABLE"
+        const slotMatch = basicResult.data.match(/SIM(\d+)\s+ENABLE/i);
+        if (slotMatch) {
+          this.sim = slotMatch[1];
+          this.pendingSimSlot = this.mapSimDisplayToCommandValue(this.sim);
+          // console.log("Parsed SIM slot:", this.sim, "Mapped to command value:", this.pendingSimSlot);
+        }
+        
+        // Parse network mode: "^SLMODE:1,0"
+        const slmodeMatch = basicResult.data.match(/\^SLMODE:\s*\d+\s*,\s*(\d+)/i);
+        if (slmodeMatch) {
+          const modeValue = parseInt(slmodeMatch[1], 10);
+          this.prefNetworkValue = modeValue;
+          this.prefNetwork = this.describePrefNetworkValue(modeValue);
+          this.updatePreferredNetworkSelectionFromValue(modeValue);
+          // console.log("Parsed network mode:", modeValue, "->", this.prefNetwork);
+        }
+      }   
+
+      // Check if SIM is present
+      const simCheckResult = await this.sendATcommand('AT+CPIN?');
+      const simStatus = simCheckResult.data.trim();
+      // console.log("SIM Check Result:", simStatus);   
+      
+      if (!simCheckResult.ok || !simCheckResult.data) {
+        console.warn("Unable to check SIM status:", this.lastErrorMessage);
+        this.apn = "Not Available";
+        this.apnIP = "Not Available";
+        this.prefNetwork = "Not Available";
+        this.bands = "Not Available";
+        this.cellLockStatus = "Not Available";
+        await this.getEsimManagerStatus();
+        return;
+      }
+
+      // If SIM is not ready, don't execute commands that require SIM
+      if (!simStatus.includes('READY')) {
+        console.warn("SIM not ready:", simStatus);
+        this.apn = "Not Available";
+        this.apnIP = "Not Available";
+        this.prefNetwork = "Not Available";
+        this.bands = "Not Available";
+        this.cellLockStatus = "Not Available";
+        
+        await this.getEsimManagerStatus();
+        console.log("=== getCurrentSettings END (No SIM) ===");
+        return;
+      }
+
+      // SIM is ready, execute full command set
       const atcmd =
-        'AT^SWITCH_SLOT?;+CGCONTRDP=1;+CGDCONT?;^BAND_PREF_EXT?;^CA_INFO?;^SLMODE?;^LTE_LOCK?;^NR5G_LOCK?';
+        'AT+CGCONTRDP=1;+CGDCONT?;^BAND_PREF_EXT?;^CA_INFO?;^SLMODE?;^LTE_LOCK?;^NR5G_LOCK?';
 
       const result = await this.sendATcommand(atcmd);
 
@@ -534,48 +595,50 @@ function cellLocking() {
       }
 
       try {
-        const settings = parseCurrentSettings(result.data);
+        if (typeof parseCurrentSettings === "function") {
+          const settings = parseCurrentSettings(result.data);
 
-        if (!settings) {
-          throw new Error('Wrong response from modem.');
-        }
+          if (!settings) {
+            throw new Error('Wrong response from modem.');
+          }
 
-        this.sim = settings.sim;
-        this.pendingSimSlot = this.mapSimDisplayToCommandValue(
-          settings.sim
-        );
-        this.apn = settings.apn;
-        this.apnIP = settings.apnIP;
-        this.cellLockStatus = settings.cellLockStatus;
-        this.prefNetwork = settings.prefNetwork;
-        this.prefNetworkValue = settings.prefNetworkValue;
-        this.updatePreferredNetworkSelectionFromValue(
-          settings.prefNetworkValue
-        );
-        this.bands = settings.bands;
+          // Don't override sim value - we already got it from SWITCH_SLOT
+          this.apn = settings.apn;
+          this.apnIP = settings.apnIP;
+          this.cellLockStatus = settings.cellLockStatus;
+          this.prefNetwork = settings.prefNetwork;
+          this.prefNetworkValue = settings.prefNetworkValue;
+          this.updatePreferredNetworkSelectionFromValue(settings.prefNetworkValue);
+          this.bands = settings.bands;
 
-        let nr5gModeValue = settings.nr5gModeValue;
+          let nr5gModeValue = settings.nr5gModeValue;
 
-        if (nr5gModeValue === null) {
-          const nr5gResult = await this.sendATcommand('AT^NR5G_MODE?');
+          if (nr5gModeValue === null) {
+            const nr5gResult = await this.sendATcommand('AT^NR5G_MODE?');
 
-          if (nr5gResult.ok && nr5gResult.data) {
-            const nr5gSettings = parseCurrentSettings(nr5gResult.data);
-            nr5gModeValue = nr5gSettings?.nr5gModeValue ?? null;
+            if (nr5gResult.ok && nr5gResult.data) {
+              const nr5gSettings = parseCurrentSettings(nr5gResult.data);
+              nr5gModeValue = nr5gSettings?.nr5gModeValue ?? null;
+            }
+          }
+
+          if (typeof describeNr5gMode === "function") {
+            this.nr5gMode = describeNr5gMode(nr5gModeValue);
           }
         }
-
-        if (typeof describeNr5gMode === "function") {
-          this.nr5gMode = describeNr5gMode(nr5gModeValue);
-        }
-        // Add eSIM server enabled status
+        
         await this.getEsimManagerStatus();
 
       } catch (error) {
         this.lastErrorMessage = error.message || 'Error while parsing the current settings.';
         console.error('Error while parsing the current settings:', error);
       }
+      
+      console.log("Final SIM value:", this.sim);
+      console.log("Final pendingSimSlot:", this.pendingSimSlot);
+      console.log("=== getCurrentSettings END ===");
     },
+    
     async getEsimManagerStatus() {
       try {
         const response = await fetch('/config/simpleadmin.conf');
@@ -588,7 +651,7 @@ function cellLocking() {
         console.error('Failed to get eSIM manager status:', error);
       }
     },
-    
+
     async toggleEsimManager() {
       if (this.isTogglingEsim) {
         event.preventDefault();
@@ -867,7 +930,7 @@ function cellLocking() {
       }
 
       this.isApplyingSimChange = true;
-      this.showModal = true;
+      this.showModalSim = true;
 
       const result = await this.sendATcommand(
         `AT^SWITCH_SLOT=${targetSlot}`
@@ -875,7 +938,7 @@ function cellLocking() {
 
       if (!result.ok) {
         this.isApplyingSimChange = false;
-        this.showModal = false;
+        this.showModalSim = false;
         alert(
             this.lastErrorMessage ||
               "Unable to change SIM. Please try again."
@@ -888,7 +951,7 @@ function cellLocking() {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
-          this.showModal = false;
+          this.showModalSim = false;
           this.isApplyingSimChange = false;
           this.getCurrentSettings();
         }
@@ -1009,13 +1072,13 @@ function cellLocking() {
         step.command.startsWith("AT+CGDCONT=1")
       );
 
-      this.showModal = true;
+      this.showModalAPN = true;
 
       if (requiresBasebandRestart) {
         const cleanupResult = await this.ensurePrimaryApnProfile();
 
         if (!cleanupResult.ok) {
-          this.showModal = false;
+          this.showModalAPN = false;
           alert(
             cleanupResult.message ||
               "Unable to prepare the APN profiles."
@@ -1028,7 +1091,7 @@ function cellLocking() {
         const result = await this.sendATcommand(step.command);
 
         if (!result.ok) {
-          this.showModal = false;
+          this.showModalAPN = false;
           alert(
             this.lastErrorMessage ||
               step.errorMessage ||
@@ -1042,7 +1105,7 @@ function cellLocking() {
         const radioOff = await this.sendATcommand("AT+CFUN=0");
 
         if (!radioOff.ok) {
-          this.showModal = false;
+          this.showModalAPN = false;
           alert(
             this.lastErrorMessage ||
               "Error while shutting down the baseband."
@@ -1053,7 +1116,7 @@ function cellLocking() {
         const radioOn = await this.sendATcommand("AT+CFUN=1");
 
         if (!radioOn.ok) {
-          this.showModal = false;
+          this.showModalAPN = false;
           alert(
             this.lastErrorMessage ||
               "Error while restarting the baseband."
@@ -1068,7 +1131,7 @@ function cellLocking() {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
-          this.showModal = false;
+          this.showModalAPN = false;
           this.newApn = null;
           this.newApnIP = null;
           this.init();
@@ -1113,7 +1176,7 @@ function cellLocking() {
         .join(",")}`;
 
       // Mock data
-      this.showModal = true;
+      this.showModalCellLock = true;
       const result = await this.sendATcommand(atcmd);
 
       // Workaround for Auto mode, when enable LTE lock, modem will go only in 4G mode
@@ -1121,7 +1184,7 @@ function cellLocking() {
       this.sendATcommand(atcmd);
 
       if (!result.ok) {
-        this.showModal = false;
+        this.showModalCellLock = false;
         alert(
           this.lastErrorMessage ||
             "Unable to apply the LTE lock."
@@ -1134,7 +1197,9 @@ function cellLocking() {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
-          this.showModal = false;
+          this.showModalCellLock = false;
+          this.getCurrentSettings();
+          this.networkModeCell = 'Cell Lock: ' + this.cellLockStatus;
         }
       }, 1000);
     },
@@ -1158,7 +1223,7 @@ function cellLocking() {
       let atcmd = `AT^NR5G_LOCK=${band},${scs},${earfcn},${pci}`;
 
       // Mock data
-      this.showModal = true;
+      this.showModalCellLock = true;
       const result = await this.sendATcommand(atcmd);
 
       // Workaround for Auto mode, when enable NR lock, modem will go only in 5G mode
@@ -1166,7 +1231,7 @@ function cellLocking() {
       this.sendATcommand(atcmd);
 
       if (!result.ok) {
-        this.showModal = false;
+        this.showModalCellLock = false;
         alert(
           this.lastErrorMessage ||
             "Unable to apply the NR5G lock."
@@ -1179,19 +1244,21 @@ function cellLocking() {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
-          this.showModal = false;
+          this.showModalCellLock = false;
+          this.getCurrentSettings();
+          this.networkModeCell = 'Cell Lock: ' + this.cellLockStatus;
         }
       }, 1000);
     },
     async cellLockDisableLTE() {
       // Send the atcmd command to reset the locked bands
       const atcmd = 'AT^LTE_LOCK';
-      this.showModal = true;
+      this.showModalCellLock = true;
 
       const result = await this.sendATcommand(atcmd);
 
       if (!result.ok) {
-        this.showModal = false;
+        this.showModalCellLock = false;
         alert(
           this.lastErrorMessage ||
             "Unable to remove the LTE lock."
@@ -1204,7 +1271,8 @@ function cellLocking() {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
-          this.showModal = false;
+          this.showModalCellLock = false;
+          this.getCurrentSettings();
         }
       }, 1000);
     },
@@ -1212,12 +1280,12 @@ function cellLocking() {
       // Send the atcmd command to reset the locked bands
       const atcmd = 'AT^NR5G_LOCK';
 
-      this.showModal = true;
+      this.showModalCellLock = true;
 
       const result = await this.sendATcommand(atcmd);
 
       if (!result.ok) {
-        this.showModal = false;
+        this.showModalCellLock = false;
         alert(
           this.lastErrorMessage ||
             "Unable to remove the NR5G lock."
@@ -1230,7 +1298,8 @@ function cellLocking() {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
-          this.showModal = false;
+          this.showModalCellLock = false;
+          this.getCurrentSettings();          
         }
       }, 1000);
     },
@@ -1258,6 +1327,7 @@ function cellLocking() {
         }
 
         this.nr5gMode = mode;
+        await this.getCurrentSettings();        
       } finally {
         this.isUpdatingNr5gMode = false;
       }
@@ -1271,12 +1341,12 @@ function cellLocking() {
         return;
       }
 
-      this.showModal = true;
+      this.showModalAPN = true;
 
       const response = await this.sendATcommand('AT+CGDCONT?');
 
       if (!response.ok || !response.data) {
-        this.showModal = false;
+        this.showModalAPN = false;
         alert(
           this.lastErrorMessage ||
             "Unable to read current APN profiles."
@@ -1292,7 +1362,7 @@ function cellLocking() {
         );
 
         if (!deleteResult.ok) {
-          this.showModal = false;
+          this.showModalAPN = false;
           alert(
             this.lastErrorMessage ||
               `Unable to remove APN profile ${ctx.cid}.`
@@ -1304,7 +1374,7 @@ function cellLocking() {
       const restartResult = await this.sendATcommand('AT+CFUN=1,1');
 
       if (!restartResult.ok) {
-        this.showModal = false;
+        this.showModalAPN = false;
         alert(
           this.lastErrorMessage ||
             "Unable to restart the modem."
@@ -1322,7 +1392,7 @@ function cellLocking() {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
-          this.showModal = false;
+          this.showModalAPN = false;
           this.init();
         }
       }, 1000);
@@ -1331,12 +1401,12 @@ function cellLocking() {
       console.log("=== resetBandLocking called ===");
       const atcmd = 'AT^BAND_PREF_EXT';
       
-      this.showModal = true;
+      this.showModalBand = true;
 
       const result = await this.sendATcommand(atcmd);
 
       if (!result.ok) {
-        this.showModal = false;
+        this.showModalBand = false;
         alert(this.lastErrorMessage || "Unable to restore band lock.");
         return;
       }
@@ -1346,7 +1416,7 @@ function cellLocking() {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
-          this.showModal = false;
+          this.showModalBand = false;
           this.init();
         }
       }, 1000);
@@ -1363,19 +1433,13 @@ function cellLocking() {
           return;
         }
 
-        const slmodeResult = await this.sendATcommand('AT^SLMODE=1,7');
-
-        if (!slmodeResult.ok) {
-          alert(this.lastErrorMessage || "Unable to reset preferred network.");
-          return;
-        }
-
         this.nr5gMode = "Auto";
-        this.prefNetwork = describePrefNetworkValue(7);
-        this.prefNetworkValue = 7;
+        this.prefNetwork = describePrefNetworkValue(0);
+        this.prefNetworkValue = 0;
         if (typeof this.updatePreferredNetworkSelectionFromValue === "function") {
-          this.updatePreferredNetworkSelectionFromValue(7);
+          this.updatePreferredNetworkSelectionFromValue(0);
         }
+        await this.getCurrentSettings();
       } finally {
         this.isUpdatingNr5gMode = false;
       }

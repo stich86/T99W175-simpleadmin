@@ -17,6 +17,40 @@
 }
 
 /* ====================================
+   New dashboard icon
+   ==================================== */
+
+.icon-container {
+  width: 90px;
+  height: 90px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+
+.card:hover .icon-container {
+  transform: scale(1.1);
+}
+
+.icon-temp {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+}
+
+.icon-sim {
+  background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+}
+
+.icon-signal {
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+}
+
+.icon-cloud {
+  background: linear-gradient(135deg, #14b8a6 0%, #10b981 100%);
+}
+
+/* ====================================
    Body & General
    ==================================== */
 body {
@@ -221,6 +255,43 @@ body {
   border-color: #bb2d3b;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.btn-danger:active {
+  transform: translateY(0);
+}
+
+.btn-info:hover {
+  background: #31d2f2;
+  border-color: #31d2f2;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(13, 202, 240, 0.3);
+}
+
+.btn-info:active {
+  transform: translateY(0);
+}
+
+.btn-secondary:hover {
+  background: #5c636a;
+  border-color: #5c636a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
+}
+
+.btn-success:hover {
+  background: #157347;
+  border-color: #157347;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(25, 135, 84, 0.3);
+}
+
+.btn-success:active {
+  transform: translateY(0);
 }
 
 .btn-outline-secondary {
@@ -585,7 +656,21 @@ footer {
 }
 
 .band-toggle-label:hover {
-    background-color: var(--bs-secondary-bg);
+  background-color: rgba(var(--bs-primary-rgb), 0.08);
+  border-color: var(--bs-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.15);
+}
+
+.band-toggle input[type="checkbox"]:checked + .band-toggle-label:hover {
+  background-color: #0b5ed7;
+  border-color: #0b5ed7;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+.band-toggle-label:active {
+  transform: translateY(0);
 }
 
 .band-toggle input[type="checkbox"]:checked + .band-toggle-label {

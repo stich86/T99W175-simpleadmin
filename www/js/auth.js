@@ -122,6 +122,17 @@
         link.classList.remove("d-none");
       }
     });
+
+    // Gestione menu items basata sul ruolo
+    const menuItems = document.querySelectorAll("[data-role-access]");
+    menuItems.forEach((item) => {
+      const allowedRoles = item.dataset.roleAccess.split(",");
+      if (session && allowedRoles.includes(session.role)) {
+        item.classList.remove("d-none");
+      } else {
+        item.classList.add("d-none");
+      }
+    });
   }
 
   function disableElement(element) {

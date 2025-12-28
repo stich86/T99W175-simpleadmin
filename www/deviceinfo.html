@@ -64,9 +64,9 @@
           <div class="collapse navbar-collapse" id="navbarText">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
               <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
-              <li class="nav-item"><a class="nav-link" href="/radio-settings.html">Radio Settings</a></li>
-              <li class="nav-item"><a class="nav-link" href="/settings.html">System Settings</a></li>
-              <li class="nav-item"><a class="nav-link" href="/advanced.html">Advanced</a></li>
+              <li class="nav-item" data-role-access="admin"><a class="nav-link" href="/radio-settings.html">Radio Settings</a></li>
+              <li class="nav-item" data-role-access="admin"><a class="nav-link" href="/settings.html">System Settings</a></li>
+              <li class="nav-item" data-role-access="admin"><a class="nav-link" href="/advanced.html">Advanced</a></li>
               <li class="nav-item"><a class="nav-link" href="/sms.html">SMS</a></li>
               <li class="nav-item"><a class="nav-link active" href="/deviceinfo.html">Device Information</a></li>
               <li class="nav-item" id="esimNavItem" style="display: none;"><a class="nav-link" href="/esim.html">eSIM</a></li>                    
@@ -128,7 +128,8 @@
                           <span x-text="imei"></span>
                           <button 
                             type="button" 
-                            class="btn btn-sm btn-link p-0 ms-2" 
+                            class="btn btn-sm btn-link p-0 ms-2"
+                            data-requires-admin="hide"
                             @click="openImeiModal()"
                             title="Edit IMEI"
                           >

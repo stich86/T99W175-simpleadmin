@@ -67,12 +67,12 @@
           <div class="collapse navbar-collapse" id="navbarText">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
               <li class="nav-item"><a class="nav-link" href="/">Home</a></li>
-              <li class="nav-item"><a class="nav-link active" href="/radio-settings.html">Radio Settings</a></li>
-              <li class="nav-item"><a class="nav-link" href="/settings.html">System Settings</a></li>
-              <li class="nav-item"><a class="nav-link" href="/advanced.html">Advanced</a></li>
+              <li class="nav-item" data-role-access="admin"><a class="nav-link active" href="/radio-settings.html">Radio Settings</a></li>
+              <li class="nav-item" data-role-access="admin"><a class="nav-link" href="/settings.html">System Settings</a></li>
+              <li class="nav-item" data-role-access="admin"><a class="nav-link" href="/advanced.html">Advanced</a></li>
               <li class="nav-item"><a class="nav-link" href="/sms.html">SMS</a></li>
               <li class="nav-item"><a class="nav-link" href="/deviceinfo.html">Device Information</a></li>
-              <li class="nav-item" id="esimNavItem" style="display: none;"><a class="nav-link" href="/esim.html">eSIM</a></li>                    
+              <li class="nav-item" id="esimNavItem" style="display: none;" data-role-access="admin"><a class="nav-link" href="/esim.html">eSIM</a></li>                    
             </ul>
             <!-- DESKTOP RIGHT SIDE -->
             <div class="navbar-text d-none d-lg-flex align-items-center gap-3">
@@ -391,189 +391,202 @@
             </div>
           </div>
 
-          <div class="col-12 col-lg-4">
-            <div class="card h-100">
-              <div class="card-header">Cell Locking</div>
-              <div class="card-body">
-                <select
-                  class="form-select"
-                  id="networkModeCell"
-                  x-model="networkModeCell"
-                  aria-label="LTE"
-                  data-requires-admin
-                >
-                  <option
-                    selected
-                    x-text="'Cell Lock: ' + cellLockStatus"
-                  ></option>
-                  <option>LTE</option>
-                  <option>NR5G-SA</option>
-                  <option>Unlock LTE</option>
-                  <option>Unlock NR5G-SA</option>
-                </select>
+        <div class="col-12 col-lg-4">
+          <div class="card h-100">
+            <div class="card-header">Cell Locking</div>
+            <div class="card-body">
+              <select
+                class="form-select"
+                id="networkModeCell"
+                x-model="networkModeCell"
+                aria-label="Network Mode"
+                data-requires-admin
+              >
+                <option
+                  selected
+                  x-text="'Cell Lock: ' + cellLockStatus"
+                ></option>
+                <option>LTE</option>
+                <option>NR5G-SA</option>
+              </select>
 
-                <div class="my-4">
-                  <div id="lteElementsCell" x-show="networkModeCell == 'LTE'">
-                    <div class="input-group mb-3">
-                      <span class="input-group-text" id="basic-addon1"
-                        >Num Cells</span
-                      >
-                      <input
-                        type="number"
-                        class="form-control"
-                        placeholder="1-10"
-                        min="1"
-                        max="10"
-                        aria-label="NumCells"
-                        aria-describedby="basic-addon1"
-                        x-model="cellNum"
-                        data-requires-admin
-                      />
-                    </div>
+              <div class="my-4">
+                <!-- LTE Lock Configuration -->
+                <div id="lteElementsCell" x-show="networkModeCell == 'LTE'">
+                  <div class="input-group mb-3">
+                    <span class="input-group-text" id="basic-addon1">Num Cells</span>
+                    <input
+                      type="number"
+                      class="form-control"
+                      placeholder="1-10"
+                      min="1"
+                      max="10"
+                      aria-label="NumCells"
+                      aria-describedby="basic-addon1"
+                      x-model="cellNum"
+                      data-requires-admin
+                    />
                   </div>
 
                   <div id="freqNumbersContainer"></div>
 
-                  <div
-                    id="saElementsCell"
-                    x-show="networkModeCell == 'NR5G-SA'"
-                  >
-                    <div
-                      class="input-group mb-3"
-                      x-show="networkModeCell == 'NR5G-SA'"
-                    >
-                      <input
-                        type="text"
-                        aria-label="EARFCN"
-                        placeholder="EARFCN"
-                        class="form-control"
-                        x-model="earfcn1"
-                        data-requires-admin
-                      />
-                      <input
-                        type="text"
-                        aria-label="PCI"
-                        placeholder="PCI"
-                        class="form-control"
-                        x-model="pci1"
-                        data-requires-admin
-                      />
-                    </div>
-
-                    <div
-                      class="input-group mb-3"
-                      x-show="networkModeCell == 'NR5G-SA'"
-                    >
-                      <select
-                        class="form-select"
-                        x-model="scs"
-                        aria-label="SCS"
-                        data-requires-admin
-                      >
-                        <option selected>SCS</option>
-                        <option value="0" >15</option>
-                        <option value="1" >30</option>
-                        <option value="2" >60</option>
-                        <option value="3" >120</option>
-                        <option value="4" >240</option>
-                      </select>
-                      <input
-                        type="text"
-                        aria-label="band"
-                        placeholder="Band"
-                        class="form-control"
-                        x-model="band"
-                        data-requires-admin
-                      />
-                    </div>
-                  </div>
-
                   <button
                     type="button"
-                    class="btn btn-primary"
-                    x-show="networkModeCell == 'LTE'"
+                    class="btn btn-primary w-100"
                     @click="cellLockEnableLTE()"
                     data-requires-admin
                   >
                     Lock LTE Cells
                   </button>
+                </div>
+
+                <!-- NR5G-SA Lock Configuration -->
+                <div id="saElementsCell" x-show="networkModeCell == 'NR5G-SA'">
+                  <div class="input-group mb-3">
+                    <input
+                      type="text"
+                      aria-label="EARFCN"
+                      placeholder="EARFCN"
+                      class="form-control"
+                      x-model="earfcn1"
+                      data-requires-admin
+                    />
+                    <input
+                      type="text"
+                      aria-label="PCI"
+                      placeholder="PCI"
+                      class="form-control"
+                      x-model="pci1"
+                      data-requires-admin
+                    />
+                  </div>
+
+                  <div class="input-group mb-3">
+                    <select
+                      class="form-select"
+                      x-model="scs"
+                      aria-label="SCS"
+                      data-requires-admin
+                    >
+                      <option selected>SCS</option>
+                      <option value="0">15</option>
+                      <option value="1">30</option>
+                      <option value="2">60</option>
+                      <option value="3">120</option>
+                      <option value="4">240</option>
+                    </select>
+                    <input
+                      type="text"
+                      aria-label="band"
+                      placeholder="Band"
+                      class="form-control"
+                      x-model="band"
+                      data-requires-admin
+                    />
+                  </div>
 
                   <button
                     type="button"
-                    class="btn btn-primary"
-                    x-show="networkModeCell == 'NR5G-SA'"
+                    class="btn btn-primary w-100"
                     @click="cellLockEnableNR()"
                     data-requires-admin
                   >
                     Lock NR5G-SA Cells
                   </button>
+                </div>
 
-                  <button
-                    type="button"
-                    class="btn btn-danger"
-                    x-show="networkModeCell == 'Unlock LTE'"
-                    @click="cellLockDisableLTE()"
-                    data-requires-admin
-                  >
-                    Unlock LTE Cells
-                  </button>
+                <!-- Unlock Buttons - shown when locks are active -->
+                <div class="mt-4 pt-3 border-top" x-show="cellLockStatus !== 'Not Locked' && cellLockStatus !== 'Unknown'">
+                  <h6 class="mb-3">Active Locks</h6>
+                  <div class="d-flex flex-column gap-2">
+                    <button
+                      type="button"
+                      class="btn btn-danger"
+                      @click="cellLockDisableLTE()"
+                      x-show="cellLockStatus.includes('LTE')"
+                      data-requires-admin
+                    >
+                      Unlock LTE
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-danger"
+                      @click="cellLockDisableNR()"
+                      x-show="cellLockStatus.includes('NR5G') || cellLockStatus.includes('5G')"
+                      data-requires-admin
+                    >
+                      Unlock 5G SA
+                    </button>
+                  </div>
+                </div>
 
-                  <button
-                    type="button"
-                    class="btn btn-danger"
-                    x-show="networkModeCell == 'Unlock NR5G-SA'"
-                    @click="cellLockDisableNR()"
-                    data-requires-admin
-                  >
-                    Unlock NR5G-SA Cells
-                  </button>
-
-                  <div class="mt-4 pt-3 border-top">
-                    <div class="d-flex align-items-center justify-content-between mb-3">
-                      <h6 class="mb-0">NR5G Mode</h6>
-                      <span class="text-muted" x-text="`Current: ${nr5gMode}`"></span>
-                    </div>
-                    <div class="d-flex flex-wrap justify-content-between gap-2">
-                      <button
-                        type="button"
-                        class="btn btn-primary"
-                        @click="setNr5gMode('NSA')"
-                        :disabled="isUpdatingNr5gMode"
-                        data-requires-admin
-                      >
-                        Set NSA
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-primary"
-                        @click="setNr5gMode('SA')"
-                        :disabled="isUpdatingNr5gMode"
-                        data-requires-admin
-                      >
-                        Set SA
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-danger"
-                        @click="resetNr5gMode()"
-                        :disabled="isUpdatingNr5gMode"
-                        data-requires-admin
-                      >
-                        Reset
-                      </button>
-                    </div>
+                <!-- NR5G Mode Section -->
+                <div class="mt-4 pt-3 border-top">
+                  <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h6 class="mb-0">NR5G Mode</h6>
+                    <span class="text-muted" x-text="`Current: ${nr5gMode}`"></span>
+                  </div>
+                  <div class="d-flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="btn btn-primary flex-fill"
+                      @click="setNr5gMode('NSA')"
+                      :disabled="isUpdatingNr5gMode"
+                      data-requires-admin
+                    >
+                      Set NSA
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-primary flex-fill"
+                      @click="setNr5gMode('SA')"
+                      :disabled="isUpdatingNr5gMode"
+                      data-requires-admin
+                    >
+                      Set SA
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-danger flex-fill"
+                      @click="resetNr5gMode()"
+                      :disabled="isUpdatingNr5gMode"
+                      data-requires-admin
+                    >
+                      Set Auto
+                    </button>
                   </div>
                 </div>
               </div>
-              <div class="card-footer">
-                <small class="text-muted">Cell locking is supported only on the primary cell and requires a reboot to take effect. Once applied, the lock persists across reboots.</small>
-              </div>
+            </div>
+            <div class="card-footer">
+              <small class="text-muted">
+                Cell locking is supported only on the primary cell and requires a
+                reboot to take effect. Once applied, the lock persists across reboots.
+              </small>
             </div>
           </div>
         </div>
 
+        <!-- Loading Modal for Cell lock -->
+        <div class="modal-overlay" x-show="showModalCellLock">
+          <div class="loading-modal">
+            <div class="loader"></div>
+            <div
+              class="loading-text"
+              style="display: flex; flex-direction: column"
+            >
+              <h3>Setting Cell Lock..</h3>
+              <p style="margin-top: 0.5rem">
+                Please wait for
+                <span x-text="countdown" style="font-weight: 500"></span>
+                seconds.
+              </p>
+            </div>
+          </div>
+        </div>
+        
         <!-- Loading Modal for Locking Band -->
-        <div class="modal-overlay" x-show="showModal">
+        <div class="modal-overlay" x-show="showModalBand">
           <div class="loading-modal">
             <div class="loader"></div>
             <div
@@ -581,6 +594,42 @@
               style="display: flex; flex-direction: column"
             >
               <h3>Reset bands to default...</h3>
+              <p style="margin-top: 0.5rem">
+                Please wait for
+                <span x-text="countdown" style="font-weight: 500"></span>
+                seconds.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading Modal for Switching Slot -->
+        <div class="modal-overlay" x-show="showModalSim">
+          <div class="loading-modal">
+            <div class="loader"></div>
+            <div
+              class="loading-text"
+              style="display: flex; flex-direction: column"
+            >
+              <h3>Changing SIM Slot</h3>
+              <p style="margin-top: 0.5rem">
+                Please wait for
+                <span x-text="countdown" style="font-weight: 500"></span>
+                seconds.
+              </p>
+            </div>
+          </div>
+        </div>
+       
+        <!-- Loading Modal for APN -->
+        <div class="modal-overlay" x-show="showModalAPN">
+          <div class="loading-modal">
+            <div class="loader"></div>
+            <div
+              class="loading-text"
+              style="display: flex; flex-direction: column"
+            >
+              <h3>Changing APN</h3>
               <p style="margin-top: 0.5rem">
                 Please wait for
                 <span x-text="countdown" style="font-weight: 500"></span>
