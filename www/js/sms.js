@@ -89,7 +89,9 @@ return {
         // Maximum world wide phone number length is 17 (North Korea), UTF-16BE Hex string comes back at 48+ for US Number, min length is 3. 
         // When 3 digit SMS short code is used the result is a 12 length string (which we then need to check if the sender hex starts with 003 or 002B(+))
         // This check is probably completley unecessary but I have no data on how the modems behave with different firmware(whether support for CSCS="UCS2" is available).
-      const sender = senderHex.length > 11 && (senderHex.startsWith('002B') || senderHex.startsWith('003')) ? this.convertHexToText(senderHex) : senderHex;
+      const sender = senderHex.length > 11 && (senderHex.startsWith('002B') || senderHex.startsWith('003'))
+        ? this.decodeHexToText(senderHex)
+        : senderHex;
       const dateStr = match[3].replace(/\+\d{2}$/, "");
       const date = this.parseCustomDate(dateStr);
       if (isNaN(date)) {
@@ -97,9 +99,18 @@ return {
         continue;
       }
       const startIndex = cmglRegex.lastIndex;
-      const endIndex = data.indexOf("+CMGL:", startIndex) !== -1 ? data.indexOf("+CMGL:", startIndex) : data.length;
-      const messageHex = data.substring(startIndex, endIndex).trim();
-      const message = /^[0-9a-fA-F]+$/.test(messageHex) ? this.convertHexToText(messageHex) : messageHex;
+      const nextCmgl = data.indexOf("+CMGL:", startIndex);
+      const nextCsca = data.indexOf("+CSCA:", startIndex);
+      let endIndex = data.length;
+      if (nextCmgl !== -1) {
+        endIndex = Math.min(endIndex, nextCmgl);
+      }
+      if (nextCsca !== -1) {
+        endIndex = Math.min(endIndex, nextCsca);
+      }
+      const messageRaw = data.substring(startIndex, endIndex).trim();
+      const messageHex = this.extractHexPayload(messageRaw);
+      const message = messageHex ? this.decodeHexToText(messageHex) : messageRaw;
       if (lastIndex !== null && this.messages[lastIndex].sender === sender && (date - this.messages[lastIndex].date) / 1000 <= 1) {
         this.messages[lastIndex].text += " " + message;
         this.messages[lastIndex].indices.push(index);
@@ -123,6 +134,70 @@ return {
   convertHexToText(hex) {
     const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
     return new TextDecoder('utf-16be').decode(bytes);
+  },
+
+  // Extract hex payload from SMS body when it is mostly hex data
+  extractHexPayload(raw) {
+    const compact = raw.replace(/\s+/g, '');
+    if (!compact) {
+      return null;
+    }
+    let hexOnly = compact.replace(/[^0-9a-fA-F]/g, '');
+    const ratio = hexOnly.length / compact.length;
+    if (ratio < 0.7 || hexOnly.length < 2) {
+      return null;
+    }
+    if (hexOnly.length % 2 === 1) {
+      hexOnly = hexOnly.slice(0, -1);
+    }
+    return hexOnly;
+  },
+
+  // Decode hex payload into readable text, picking the most plausible encoding
+  decodeHexToText(hex) {
+    const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+    const utf16Text = new TextDecoder('utf-16be').decode(bytes);
+    const utf8Text = new TextDecoder('utf-8').decode(bytes);
+    const utf16Score = this.scoreDecodedText(utf16Text);
+    const utf8Score = this.scoreDecodedText(utf8Text);
+    const zeroEvenRatio = this.ucs2ZeroEvenRatio(bytes);
+    if (zeroEvenRatio > 0.3) {
+      return utf16Score >= utf8Score - 0.1 ? utf16Text : utf8Text;
+    }
+    return utf8Score >= utf16Score ? utf8Text : utf16Text;
+  },
+
+  scoreDecodedText(text) {
+    if (!text) {
+      return 0;
+    }
+    let score = 0;
+    for (const char of text) {
+      if (char === '\uFFFD') {
+        score -= 5;
+        continue;
+      }
+      if (/\p{L}|\p{N}|\p{P}|\p{Zs}/u.test(char)) {
+        score += 1;
+      } else if (/\p{C}/u.test(char)) {
+        score -= 2;
+      }
+    }
+    return score / text.length;
+  },
+
+  ucs2ZeroEvenRatio(bytes) {
+    if (!bytes || bytes.length < 2) {
+      return 0;
+    }
+    let zeroEven = 0;
+    const pairs = Math.floor(bytes.length / 2);
+    for (let i = 0; i < pairs; i++) {
+      if (bytes[i * 2] === 0) {
+        zeroEven += 1;
+      }
+    }
+    return zeroEven / pairs;
   },
 
   // Custom date parsing function
