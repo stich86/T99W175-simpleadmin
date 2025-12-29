@@ -1,4 +1,5 @@
-document.addEventListener("alpine:init", () => {
+// Support both dynamic loading and normal page load
+function registerNetworkSettings() {
   Alpine.data("networkSettings", () => ({
     isLoading: false,
     isSaving: false,
@@ -734,4 +735,14 @@ document.addEventListener("alpine:init", () => {
       }
     },
   }));
-});
+}
+
+// Register the component - supports both normal and dynamic loading
+if (typeof Alpine !== 'undefined' && Alpine.version) {
+  // Alpine is already initialized (dynamic loading), register immediately
+  console.log('Alpine already initialized, registering networkSettings component directly');
+  registerNetworkSettings();
+} else {
+  // Alpine not yet initialized (normal page load), wait for the event
+  document.addEventListener("alpine:init", registerNetworkSettings);
+}

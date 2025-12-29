@@ -15,7 +15,11 @@ document.addEventListener("DOMContentLoaded", () => {
   if (typeof SimpleAdminAuth !== "undefined") {
     SimpleAdminAuth.ensureSession().then((session) => {
       if (session) {
+        // Already logged in, redirect to intended page or dashboard
         window.location.replace("/index.html");
+        setTimeout(() => {
+          SimpleAdminAuth.restorePostLoginRoute();
+        }, 100);
       }
     });
   }
@@ -60,7 +64,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      // Login successful - redirect to index, then restore route
       window.location.replace("/index.html");
+      setTimeout(() => {
+        if (typeof SimpleAdminAuth !== "undefined" && SimpleAdminAuth.restorePostLoginRoute) {
+          SimpleAdminAuth.restorePostLoginRoute();
+        }
+      }, 100);
     } catch (error) {
       console.error("Login failed", error);
       showAlert("Error during authentication.");

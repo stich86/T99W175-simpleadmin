@@ -155,7 +155,7 @@
         <div class="row mt-5 gap-3">
           <div class="col">
             <div class="card">
-              <div class="card-header">Network Information</div>
+              <div class="card-header">Network & System Information</div>
               <div class="card-body">
                 <div class="card-text table-responsive-sm">
                   <table class="table">
@@ -188,6 +188,74 @@
                         <th scope="row">Uptime</th>
                         <td x-text="uptime"></td>
                       </tr>
+                      <tr>
+                        <th scope="row">CPU Usage</th>
+                        <td
+                          class="gap-4 align-items-center"
+                          x-data="{
+                            getCpuProgressBarClass: function() {
+                              var percentage = this.cpuUsage;
+
+                              if (percentage < 50) {
+                                return 'progress-bar bg-success is-medium';
+                              } else if (percentage < 80) {
+                                return 'progress-bar bg-warning is-warning is-medium';
+                              }
+                              return 'progress-bar bg-danger is-medium';
+                            }
+                          }"
+                        >
+                          <div class="progress w-100" role="progressbar" aria-label="CPU usage" aria-valuemin="0" aria-valuemax="100" style="height: 18px">
+                            <div
+                              :class="getCpuProgressBarClass()"
+                              :style="'width: ' + cpuUsage + '%'"
+                            >
+                              <span x-text="cpuUsage + '%'"></span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Memory Usage</th>
+                        <td
+                          class="gap-4 align-items-center"
+                          x-data="{
+                            getMemProgressBarClass: function() {
+                              var percentage = this.memPercent;
+
+                              if (percentage < 50) {
+                                return 'progress-bar bg-success is-medium';
+                              } else if (percentage < 80) {
+                                return 'progress-bar bg-warning is-warning is-medium';
+                              }
+                              return 'progress-bar bg-danger is-medium';
+                            }
+                          }"
+                        >
+                          <div class="progress w-100" role="progressbar" aria-label="Memory usage" aria-valuemin="0" aria-valuemax="100" style="height: 18px">
+                            <div
+                              :class="getMemProgressBarClass()"
+                              :style="'width: ' + memPercent + '%'"
+                            >
+                              <span x-text="(memUsed / 1024).toFixed(1) + 'MB / ' + (memTotal / 1024).toFixed(1) + 'MB (' + memPercent + '%)'"></span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <th scope="row">Ethernet Speed</th>
+                        <td>
+                          <span x-text="systemSpeed"></span>
+                          <template x-if="systemDuplex !== 'Unknown' && systemDuplex !== ''">
+                            <span class="ms-2">
+                              <span class="badge" :class="{
+                                'bg-success': systemDuplex === 'Full',
+                                'bg-warning': systemDuplex === 'Half'
+                              }" x-text="systemDuplex + ' Duplex'"></span>
+                            </span>
+                          </template>
+                        </td>
+                      </tr>                      
                     </tbody>
                   </table>
                 </div>

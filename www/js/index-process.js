@@ -71,6 +71,12 @@ const defaultDataState = {
   signalPercentage: "0",
   signalAssessment: "Unknown",
   uptime: "Unknown",
+  systemSpeed: "Unknown",
+  systemDuplex: "Unknown",
+  cpuUsage: 0,
+  memUsed: 0,
+  memTotal: 0,
+  memPercent: 0,
   lastUpdate: new Date().toLocaleString(),
   newRefreshRate: null,
   refreshRate: 3,
@@ -1446,8 +1452,8 @@ return {
     }
   },
 
- fetchUpTime() {
-  fetch("/cgi-bin/get_uptime")
+ fetchSysInfo() {
+  fetch("/cgi-bin/get_sys_info")
     .then((response) => {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -1457,13 +1463,19 @@ return {
     .then((data) => {
       if (data.status !== 'ok') {
         this.uptime = "Unknown Time";
+        this.systemSpeed = "Unknown";
+        this.systemDuplex = "Unknown";
+        this.cpuUsage = 0;
+        this.memUsed = 0;
+        this.memTotal = 0;
+        this.memPercent = 0;
         return;
       }
 
       const days = parseInt(data.days) || 0;
       const hours = parseInt(data.hours) || 0;
       const minutes = parseInt(data.minutes) || 0;
-      
+
       const parts = [];
 
       // Format days
@@ -1492,10 +1504,30 @@ return {
         // For 3 parts (days, hours, minutes)
         this.uptime = parts[0] + ', ' + parts[1] + ' and ' + parts[2];
       }
+
+      // Extract system speed
+      this.systemSpeed = data.speed || "Unknown";
+
+      // Extract duplex mode
+      this.systemDuplex = data.duplex || "Unknown";
+
+      // Extract CPU usage percentage
+      this.cpuUsage = parseInt(data.cpu_usage) || 0;
+
+      // Extract memory usage
+      this.memUsed = parseInt(data.mem_used) || 0;
+      this.memTotal = parseInt(data.mem_total) || 0;
+      this.memPercent = parseInt(data.mem_percent) || 0;
     })
     .catch((error) => {
       console.error("Error fetching uptime:", error);
       this.uptime = "Unknown Time";
+      this.systemSpeed = "Unknown";
+      this.systemDuplex = "Unknown";
+      this.cpuUsage = 0;
+      this.memUsed = 0;
+      this.memTotal = 0;
+      this.memPercent = 0;
     });
   },
 
@@ -1516,8 +1548,8 @@ return {
   },
 
   init() {
-    // Fetch uptime
-    this.fetchUpTime();
+    // Fetch system information (uptime, load, network speed)
+    this.fetchSysInfo();
     // Retrieve the refresh rate from local storage or session storage
     const storedRefreshRate = localStorage.getItem("refreshRate");
     // If a refresh rate is stored, use it; otherwise, use a default value
@@ -1543,7 +1575,7 @@ return {
     console.log("Initialized");
     // Set the refresh rate for interval
     this.intervalId = setInterval(() => {
-      this.fetchUpTime();
+      this.fetchSysInfo();
 
       this.fetchAllInfo();
 
