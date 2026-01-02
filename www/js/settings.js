@@ -63,11 +63,20 @@ function registerNetworkSettings() {
       bridgeEnabled: false,
       bridgeMac: "",
     },
+    ipErrors: {
+      ipAddress: false,
+      dhcpStart: false,
+      dhcpEnd: false,
+      dmzIp: false,
+      dhcpLease: false,
+    },
+    arpEntries: [],
     async init() {
       await this.fetchConfiguration();
       await this.fetchTtlSettings();
       await this.loadRebootSchedule();
       await this.fetchConnectionConfig();
+      await this.fetchArpEntries();
     },
     resetMessages() {
       this.successMessage = "";
@@ -112,6 +121,24 @@ function registerNetworkSettings() {
       const networkPrefix = `${octets[0]}.${octets[1]}.${octets[2]}`;
       this.form.dhcpStart = `${networkPrefix}.20`;
       this.form.dhcpEnd = `${networkPrefix}.60`;
+    },
+    validateIpField(field, value) {
+      this.ipErrors[field] = value !== "" && !this.isValidIp(value);
+    },
+    validateDhcpLease(value) {
+      const lease = Number(value);
+      this.ipErrors.dhcpLease = value !== "" && (!Number.isInteger(lease) || lease <= 0);
+    },
+    clearDmzError() {
+      if (!this.form.dmzEnabled) {
+        this.form.dmzIp = "";
+        this.ipErrors.dmzIp = false;
+      }
+    },
+    clearBridgeError() {
+      if (!this.form.bridgeEnabled) {
+        this.form.bridgeMac = "";
+      }
     },
     async applyTTL() {
       this.ttlSaving = true
@@ -792,6 +819,21 @@ function registerNetworkSettings() {
           error && error.message ? error.message : "Failed to save configuration";
       } finally {
         this.connectionConfigSaving = false;
+      }
+    },
+    async fetchArpEntries() {
+      try {
+        const response = await fetch("/cgi-bin/get_arp");
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.status === "success") {
+          this.arpEntries = data.entries || [];
+        }
+      } catch (error) {
+        console.error("Error loading ARP entries:", error);
+        this.arpEntries = [];
       }
     },
   }));

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="light">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -12,6 +12,14 @@
     <!-- Logo -->
     <link rel="simpleadmin-logo" href="favicon.ico" />
 
+    <!-- Apply theme immediately to prevent flash -->
+    <script>
+      (function() {
+        const theme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-bs-theme', theme);
+      })();
+    </script>
+
     <!--  Import BootStrap Javascript -->
     <script src="js/jsQR.js"></script>
     <script src="js/auth.js" defer></script>
@@ -19,6 +27,7 @@
     <script src="js/alpinejs.min.js" defer></script>
     <script src="js/esim-config.js"></script>
     <script src="js/esim.js"></script>
+  
     <script src="js/dark-mode.js" defer></script>
   </head>
   <body data-require-auth="true">
@@ -219,8 +228,16 @@
                       <h5 class="fw-semibold mb-3">Download new profile</h5>
                       <form class="row g-3" @submit.prevent="downloadProfile">
                         <div class="col-md-6">
-                          <label class="form-label" for="qrUpload">Upload QR code (optional)</label>
-                          <input type="file" class="form-control" id="qrUpload" accept="image/*" @change="handleQrUpload($event)" />
+                          <label class="form-label">Upload QR code (optional)</label>
+                          <input type="file" id="qrUpload" accept="image/*" @change="handleQrUpload($event)" class="d-none" />
+                          <button
+                            type="button"
+                            class="btn btn-outline-secondary w-100"
+                            @click="$el.previousElementSibling.click()"
+                            title="Upload QR code file">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" class="me-2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Upload QR Code
+                          </button>
                           <div class="form-text">Automatically fills the fields</div>
                         </div>
                         <div class="col-md-6">
@@ -507,6 +524,39 @@
           </div>
         </template>
       </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 border-top">
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col-md-6 text-center text-md-start mb-2 mb-md-0">
+            <span class="text-muted small d-inline-flex align-items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span>Simple T99 T99-RC05-Final</span>
+            </span>
+          </div>
+          <div class="col-md-6 text-center text-md-end">
+            <a href="https://github.com/Brazzo978/T99W175-simpleadmin" target="_blank" rel="noopener noreferrer" class="text-decoration-none text-muted small d-inline-flex align-items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+              </svg>
+              <span>GitHub</span>
+            </a>
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-12 text-center">
+            <span class="text-muted small" style="opacity: 0.7;">
+              © 2026 T99W175 SimpleAdmin. Released under MIT License.
+            </span>
+          </div>
+        </div>
+      </div>
+    </footer>
     </main>
   </body>
 </html>

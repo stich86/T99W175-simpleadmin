@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en">
 
 <head>
   <meta charset="utf-8" />
@@ -12,6 +12,14 @@
   <!-- Logo -->
   <link rel="simpleadmin-logo" href="favicon.ico" />
 
+  <!-- Apply theme immediately to prevent flash -->
+  <script>
+    (function() {
+      const theme = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-bs-theme', theme);
+    })();
+  </script>
+
   <!--  Import BootStrap Javascript -->
   <script src="js/auth.js" defer></script>
   <script src="js/bootstrap.bundle.min.js"></script>
@@ -21,11 +29,12 @@
   <script src="js/sms.js"></script>
   <script src="js/atcommand-utils.js"></script>
   <script src="js/dark-mode.js" defer></script>
+  
 </head>
 
 <body data-require-auth="true">
   <main>
-    <div class="container my-4" x-data="fetchSMS()" x-init="init()">
+    <div class="container my-4" x-data="fetchSMS()">
       <nav class="navbar navbar-expand-lg mt-2">
         <div class="container-fluid">
           <a class="navbar-brand" href="/">
@@ -157,50 +166,87 @@
       <div class="row mt-5 mb-4">
         <div class="col">
           <div class="card" data-requires-admin>
-            <div class="card-header">SMS Inbox</div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span>SMS Inbox</span>
+              <span class="badge bg-secondary" x-text="`${storageUsed}/${storageTotal}`"></span>
+            </div>
             <div class="card-body">
+              <!-- Storage progress bar -->
+              <div class="mb-3" x-show="!isLoading">
+                <label class="form-text d-flex justify-content-between">
+                  <span>Storage Usage</span>
+                  <span x-text="`${storageUsed}/${storageTotal} messages (${storagePercentage()}%)`"></span>
+                </label>
+                <div class="progress" style="height: 10px;">
+                  <div class="progress-bar" :class="storageProgressClass()"
+                       role="progressbar"
+                       :style="`width: ${storagePercentage()}%`"
+                       :aria-valuenow="storageUsed"
+                       :aria-valuemin="0"
+                       :aria-valuemax="storageTotal">
+                  </div>
+                </div>
+              </div>
               <div class="card-text">
                 <div class="col">
-                  <div style="
-                        max-height: 400px;
-                        overflow-y: scroll;
-                        overflow-x: hidden;
-                      ">
-                    <div x-show="isLoading">
-                      <h4>Fetching SMS...</h4>
-                    </div>
-                    <table class="table table-hover border-success" x-show="!isLoading">
-                      <tbody>
+                  <div style="max-height: 400px; overflow-y: auto;">
+                    <div style="padding-bottom: 200px;">
+                      <div x-show="isLoading">
+                        <h4>Fetching SMS...</h4>
+                      </div>
 
-                        <template x-if="messages.length === 0 && !isLoading">
-                          <div>
-                            <p>Inbox is Empty</p>
-                          </div>
-                        </template>
-                        
+                      <template x-if="messages.length === 0 && !isLoading">
+                        <div>
+                          <p>Inbox is Empty</p>
+                        </div>
+                      </template>
+
+                      <div x-show="!isLoading && messages.length > 0">
                         <template x-for="(message, index) in messages" :key="index">
-                          <tr>
-                            <td>
-                              <div class="form-check">
-                                <input class="form-check-input" type="checkbox" :value="index"
-                                  x-model="selectedMessages" />
-                                <div class="row column-gap-1 mb-2">
-                                  <div class="col-md-3">
-                                    <p x-text="'Sender: ' + senders[index]"></p>
-                                  </div>
-                                  <div class="col">
-                                    <p x-text="'Date and Time: ' + dates[index]"></p>
-                                  </div>
+                          <div class="card mb-2"
+                               :class="{ 'border-primary': isMessageExpanded(index) }"
+                               style="cursor: pointer; transition: all 0.2s ease;"
+                               @click="toggleMessage(index)">
+                            <div class="card-body">
+                              <div class="d-flex align-items-start gap-3">
+                                <div class="form-check pt-1" @click.stop>
+                                  <input class="form-check-input" type="checkbox" :value="index"
+                                    x-model="selectedMessages" />
                                 </div>
-                                <div class="col-md-9">
-                                  <p x-text="message.text"></p>
+                                <div class="flex-grow-1" style="min-width: 0;">
+                                  <!-- Header - always visible -->
+                                  <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                      <strong class="text-dark" x-text="senders[index]"></strong>
+                                    </div>
+                                    <small class="text-muted" x-text="dates[index]"></small>
+                                  </div>
+
+                                  <!-- Collapsed preview -->
+                                  <div x-show="!isMessageExpanded(index)">
+                                    <p class="mb-0 text-muted" style="
+                                      white-space: nowrap;
+                                      overflow: hidden;
+                                      text-overflow: ellipsis;
+                                      max-width: 100%;
+                                    " x-text="message.text"></p>
+                                  </div>
+
+                                  <!-- Expanded message -->
+                                  <div x-show="isMessageExpanded(index)" x-transition:enter="transition ease-out duration-200"
+                                       x-transition:enter-start="opacity-0 -translate-y-1"
+                                       x-transition:enter-end="opacity-100 translate-y-0">
+                                    <div class="p-3 bg-light rounded border">
+                                      <p class="mb-0" style="white-space: pre-wrap; word-break: break-word;" x-text="message.text"></p>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                            </td>
-                          </tr>
+                            </div>
+                          </div>
                         </template>
-                      </tbody>
-                    </table>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -213,9 +259,37 @@
               </div>
             </div>
             <div class="card-footer">
-              <div class="d-grid gap-2 d-md-flex justify-content-md-start">                                
-                <button class="btn btn-success" type="button" @click="init()" data-allow-user="true">Refresh</button>
-                <button class="btn btn-danger" type="button" @click="deleteSelectedSMS()">Delete Selected SMS</button>
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+                  <button class="btn btn-success" type="button" @click="init()" data-allow-user="true">Refresh</button>
+                  <button class="btn btn-danger" type="button" @click="deleteSelectedSMS()">Delete Selected SMS</button>
+                </div>
+
+                <!-- Memory selector -->
+                <div class="d-flex align-items-center gap-2">
+                  <span class="text-muted small">Storage:</span>
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                            data-bs-toggle="dropdown"
+                            :disabled="changingStorage || isLoading">
+                      <span x-text="getMemoryTypeName()"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      <li>
+                        <a class="dropdown-item" href="#" @click.prevent="changeStorageMemory('SM')"
+                           :class="{ active: storageMemoryType === 'SM', 'fw-bold': storageMemoryType === 'SM' }">
+                          SIM
+                        </a>
+                      </li>
+                      <li>
+                        <a class="dropdown-item" href="#" @click.prevent="changeStorageMemory('ME')"
+                           :class="{ active: storageMemoryType === 'ME', 'fw-bold': storageMemoryType === 'ME' }">
+                          Memory
+                        </a>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -262,6 +336,39 @@
         </div>
       </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 border-top">
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col-md-6 text-center text-md-start mb-2 mb-md-0">
+            <span class="text-muted small d-inline-flex align-items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span>Simple T99 T99-RC05-Final</span>
+            </span>
+          </div>
+          <div class="col-md-6 text-center text-md-end">
+            <a href="https://github.com/Brazzo978/T99W175-simpleadmin" target="_blank" rel="noopener noreferrer" class="text-decoration-none text-muted small d-inline-flex align-items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+              </svg>
+              <span>GitHub</span>
+            </a>
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-12 text-center">
+            <span class="text-muted small" style="opacity: 0.7;">
+              © 2026 T99W175 SimpleAdmin. Released under MIT License.
+            </span>
+          </div>
+        </div>
+      </div>
+    </footer>
   </main>
 </body>
 </html>

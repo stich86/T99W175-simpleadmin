@@ -1,16 +1,24 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="light">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Simple T99</title>
     <!-- Import all the bootstrap css files from css folder -->
     <link rel="stylesheet" href="css/bootstrap.min.css" />
-    <link rel="stylesheet" href="css/styles.css" />     
+    <link rel="stylesheet" href="css/styles.css" />
     <link rel="stylesheet" href="css/custom-styles.css" />
 
     <!-- Logo -->
     <link rel="simpleadmin-logo" href="favicon.ico" />
+
+    <!-- Apply theme immediately to prevent flash -->
+    <script>
+      (function() {
+        const theme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-bs-theme', theme);
+      })();
+    </script>
 
     <!--  Import BootStrap Javascript -->
     <script src="js/auth.js" defer></script>
@@ -20,6 +28,7 @@
     <script src="js/index-esim.js" defer></script>
     <script src="js/settings.js"></script>
     <script src="js/atcommand-utils.js"></script>
+  
     <script src="js/dark-mode.js" defer></script>
   </head>
   <body data-require-auth="true">
@@ -194,13 +203,18 @@
                           <input
                             id="ipAddress"
                             class="form-control"
+                            :class="{'is-invalid': ipErrors.ipAddress}"
                             type="text"
                             inputmode="decimal"
                             autocomplete="off"
                             :disabled="isSaving"
                             x-model.trim="form.ipAddress"
                             @change="handleIpChange"
+                            @input="validateIpField('ipAddress', form.ipAddress)"
                           />
+                          <template x-if="ipErrors.ipAddress">
+                            <div class="invalid-feedback d-block">Invalid IP address</div>
+                          </template>
                         </div>
                         <div class="col-md-6">
                           <label class="form-label" for="subnetMask">Subnet mask</label>
@@ -238,26 +252,34 @@
                           <input
                             id="dhcpStart"
                             class="form-control"
+                            :class="{'is-invalid': ipErrors.dhcpStart}"
                             type="text"
                             inputmode="decimal"
                             autocomplete="off"
                             :disabled="isSaving || !form.dhcpEnabled"
                             x-model.trim="form.dhcpStart"
-                            @input="dhcpRangeEdited = true"
+                            @input="dhcpRangeEdited = true; validateIpField('dhcpStart', form.dhcpStart)"
                           />
+                          <template x-if="ipErrors.dhcpStart">
+                            <div class="invalid-feedback d-block">Invalid IP address</div>
+                          </template>
                         </div>
                         <div class="col-md-6">
                           <label class="form-label" for="dhcpEnd">DHCP range end</label>
                           <input
                             id="dhcpEnd"
                             class="form-control"
+                            :class="{'is-invalid': ipErrors.dhcpEnd}"
                             type="text"
                             inputmode="decimal"
                             autocomplete="off"
                             :disabled="isSaving || !form.dhcpEnabled"
                             x-model.trim="form.dhcpEnd"
-                            @input="dhcpRangeEdited = true"
+                            @input="dhcpRangeEdited = true; validateIpField('dhcpEnd', form.dhcpEnd)"
                           />
+                          <template x-if="ipErrors.dhcpEnd">
+                            <div class="invalid-feedback d-block">Invalid IP address</div>
+                          </template>
                         </div>
                       </div>
 
@@ -267,12 +289,17 @@
                           <input
                             id="dhcpLease"
                             class="form-control"
+                            :class="{'is-invalid': ipErrors.dhcpLease}"
                             type="number"
                             min="60"
                             step="60"
                             :disabled="isSaving || !form.dhcpEnabled"
                             x-model.trim="form.dhcpLease"
+                            @input="validateDhcpLease(form.dhcpLease)"
                           />
+                          <template x-if="ipErrors.dhcpLease">
+                            <div class="invalid-feedback d-block">Lease time must be a positive number</div>
+                          </template>
                         </div>
                       </div>
 
@@ -287,6 +314,7 @@
                           role="switch"
                           :disabled="isSaving"
                           x-model="form.dmzEnabled"
+                          @change="clearDmzError()"
                         />
                         <label class="form-check-label" for="dmzEnabled">Enable DMZ</label>
                       </div>
@@ -297,12 +325,17 @@
                           <input
                             id="dmzIp"
                             class="form-control"
+                            :class="{'is-invalid': ipErrors.dmzIp}"
                             type="text"
                             inputmode="decimal"
                             autocomplete="off"
                             :disabled="isSaving || !form.dmzEnabled"
                             x-model.trim="form.dmzIp"
+                            @input="validateIpField('dmzIp', form.dmzIp)"
                           />
+                          <template x-if="ipErrors.dmzIp">
+                            <div class="invalid-feedback d-block">Invalid IP address</div>
+                          </template>
                         </div>
                       </div>
 
@@ -317,24 +350,35 @@
                           role="switch"
                           :disabled="isSaving"
                           x-model="form.bridgeEnabled"
+                          @change="clearBridgeError()"
                         />
                         <label class="form-check-label" for="bridgeEnabled">Enable bridge mode (IP passthrough)</label>
                       </div>
 
                       <div class="row g-3 mt-1">
-                        <div class="col-md-8">
+                        <div class="col-md-12">
                           <label class="form-label" for="bridgeMac">Bridge client MAC address</label>
-                          <input
-                            id="bridgeMac"
-                            class="form-control"
-                            type="text"
-                            inputmode="text"
-                            autocomplete="off"
-                            placeholder="AA:BB:CC:DD:EE:FF"
-                            :disabled="isSaving || !form.bridgeEnabled"
-                            x-model.trim="form.bridgeMac"
-                            @input="form.bridgeMac = form.bridgeMac.toUpperCase()"
-                          />
+                          <div class="input-group">
+                            <select
+                              id="bridgeMac"
+                              class="form-select"
+                              :disabled="isSaving || !form.bridgeEnabled"
+                              x-model.trim="form.bridgeMac"
+                            >
+                              <option value="">Select a device from the network</option>
+                              <template x-for="entry in arpEntries" :key="entry.mac">
+                                <option :value="entry.mac" x-text="entry.label"></option>
+                              </template>
+                            </select>
+                            <button
+                              class="btn btn-outline-secondary"
+                              type="button"
+                              :disabled="isSaving || !form.bridgeEnabled"
+                              @click="fetchArpEntries()"
+                              title="Refresh device list">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                            </button>
+                          </div>
                           <div class="form-text">
                             When bridge mode is enabled, the selected device receives the public IP directly and the router interface remains on the LAN subnet.
                           </div>
@@ -473,7 +517,7 @@
                       </template>
 
                       <p class="text-body-secondary mb-3">
-                        Set up a scheduled reboot: the configuration is saved as a cron-tab job to reboot the Linux OS.
+                        Set up a scheduled reboot: the configuration is saved as a cron-tab job to reboot the module.
                       </p>
 
                       <div class="form-check form-switch mb-3 d-inline-flex align-items-center gap-2">
@@ -744,6 +788,39 @@
           </div>
         </div>
       </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 border-top">
+      <div class="container">
+        <div class="row align-items-center">
+          <div class="col-md-6 text-center text-md-start mb-2 mb-md-0">
+            <span class="text-muted small d-inline-flex align-items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span>Simple T99 T99-RC05-Final</span>
+            </span>
+          </div>
+          <div class="col-md-6 text-center text-md-end">
+            <a href="https://github.com/Brazzo978/T99W175-simpleadmin" target="_blank" rel="noopener noreferrer" class="text-decoration-none text-muted small d-inline-flex align-items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+              </svg>
+              <span>GitHub</span>
+            </a>
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-12 text-center">
+            <span class="text-muted small" style="opacity: 0.7;">
+              © 2026 T99W175 SimpleAdmin. Released under MIT License.
+            </span>
+          </div>
+        </div>
+      </div>
+    </footer>
     </main>
   </body>
 </html>

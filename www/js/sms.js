@@ -13,6 +13,92 @@ return {
   serviceCenters: [],
   showError: false,
   errorMessage: "",
+  expandedMessages: {},  // Track which messages are expanded by index
+
+  // Storage status
+  storageUsed: 0,
+  storageTotal: 0,
+  storageMemoryType: 'SM', // Will be updated from CPMS? response
+  changingStorage: false,
+
+  // Calculate storage percentage
+  storagePercentage() {
+    if (this.storageTotal === 0) return 0;
+    return Math.round((this.storageUsed / this.storageTotal) * 100);
+  },
+
+  // Get progress bar color class based on usage
+  storageProgressClass() {
+    const percentage = this.storagePercentage();
+    if (percentage >= 90) return 'bg-danger';
+    if (percentage >= 70) return 'bg-warning';
+    return 'bg-success';
+  },
+
+  // Get human-readable memory type name
+  getMemoryTypeName() {
+    return this.storageMemoryType === 'SM' ? 'SIM' : 'Memory';
+  },
+
+  // Change SMS storage memory
+  async changeStorageMemory(memoryType) {
+    if (this.changingStorage || memoryType === this.storageMemoryType) {
+      return;
+    }
+
+    this.changingStorage = true;
+    try {
+      // Set the memory type
+      const setResult = await ATCommandService.execute(`AT+CPMS="${memoryType}","${memoryType}","${memoryType}"`, {
+        retries: 2,
+        timeout: 10000,
+      });
+
+      if (!setResult.ok) {
+        this.showNotification(`Failed to change storage to ${memoryType}`, 'danger');
+        return;
+      }
+
+      // Query the current storage status to confirm
+      const queryResult = await ATCommandService.execute('AT+CPMS?', {
+        retries: 2,
+        timeout: 10000,
+      });
+
+      if (queryResult.ok && queryResult.data) {
+        // Parse CPMS? response - try multiple formats
+        // Format 1: +CPMS: "SM",2,50,2,50,2,50
+        // Format 2: +CPMS: 2,50,2,50,2,50
+        let cpmsMatch = queryResult.data.match(/^\s*\+CPMS:\s*"([^"]*)",(\d+),(\d+)/m);
+
+        if (!cpmsMatch) {
+          // Try without memory type
+          cpmsMatch = queryResult.data.match(/^\s*\+CPMS:\s*(\d+),(\d+)/m);
+        }
+
+        if (cpmsMatch) {
+          if (cpmsMatch.length === 4) {
+            // Has memory type: "SM",used,total
+            this.storageMemoryType = cpmsMatch[1];
+            this.storageUsed = parseInt(cpmsMatch[2], 10);
+            this.storageTotal = parseInt(cpmsMatch[3], 10);
+          } else if (cpmsMatch.length === 3) {
+            // No memory type: used,total
+            this.storageUsed = parseInt(cpmsMatch[1], 10);
+            this.storageTotal = parseInt(cpmsMatch[2], 10);
+          }
+        }
+      }
+
+      // Refresh SMS list with new storage (skip CPMS since we just queried it)
+      await this.requestSMS(true);
+      this.showNotification(`Storage changed to ${this.getMemoryTypeName()}`, 'success');
+    } catch (error) {
+      this.showNotification(`Error changing storage: ${error.message}`, 'danger');
+    } finally {
+      this.changingStorage = false;
+    }
+  },
 
   // Clear existing data
   clearData() {
@@ -37,12 +123,52 @@ return {
   },
 
   // Request SMS messages
-  async requestSMS() {
+  async requestSMS(skipCPMS = false) {
+    // Prevent multiple simultaneous requests
+    if (this.isLoading) {
+      console.log('requestSMS already loading, skipping');
+      return;
+    }
+
     this.isLoading = true;
     const atcmd =
-      'AT+CSMS=1;+CSDH=0;+CNMI=2,1,0,0,0;+CMGF=1;+CSCA?;+CSMP=17,167,0,8;+CPMS="SM","SM","SM";+CSCS="UCS2";+CMGL="ALL"';
+      'AT+CSMS=1;+CSDH=0;+CNMI=2,1,0,0,0;+CMGF=1;+CSCA?;+CSMP=17,167,0,8;+CSCS="UCS2";+CMGL="ALL"';
 
     try {
+      // Query storage info separately (unless already done)
+      if (!skipCPMS) {
+        const cpmsResult = await ATCommandService.execute('AT+CPMS?', {
+          retries: 2,
+          timeout: 10000,
+        });
+
+        if (cpmsResult.ok && cpmsResult.data) {
+          // Parse CPMS? response - try multiple formats
+          // Format 1: +CPMS: "SM",2,50,2,50,2,50
+          // Format 2: +CPMS: 2,50,2,50,2,50
+          let cpmsMatch = cpmsResult.data.match(/^\s*\+CPMS:\s*"([^"]*)",(\d+),(\d+)/m);
+
+          if (!cpmsMatch) {
+            // Try without memory type
+            cpmsMatch = cpmsResult.data.match(/^\s*\+CPMS:\s*(\d+),(\d+)/m);
+          }
+
+          if (cpmsMatch) {
+            if (cpmsMatch.length === 4) {
+              // Has memory type: "SM",used,total
+              this.storageMemoryType = cpmsMatch[1];
+              this.storageUsed = parseInt(cpmsMatch[2], 10);
+              this.storageTotal = parseInt(cpmsMatch[3], 10);
+            } else if (cpmsMatch.length === 3) {
+              // No memory type: used,total
+              this.storageUsed = parseInt(cpmsMatch[1], 10);
+              this.storageTotal = parseInt(cpmsMatch[2], 10);
+            }
+          }
+        }
+      }
+
+      // Now fetch SMS messages (without CPMS since we already queried it)
       const result = await ATCommandService.execute(atcmd, {
         retries: 2,
         timeout: 20000,
@@ -81,6 +207,8 @@ return {
     this.dates = [];
     this.senders = [];
     this.messages = [];
+
+
     let match;
     while ((match = cmglRegex.exec(data)) !== null) {
       const index = parseInt(match[1]);
@@ -195,22 +323,23 @@ return {
   // Custom date parsing function
   parseCustomDate(dateStr) {
     const [datePart, timePart] = dateStr.split(',');
-    const [day, month, year] = datePart.split('/').map(part => parseInt(part, 10));
+    // Format from modem is YY/MM/DD
+    const [year, month, day] = datePart.split('/').map(part => parseInt(part, 10));
     const [hour, minute, second] = timePart.split(':').map(part => parseInt(part, 10));
 
-    // Convert the date into a standard Date object
+    // Convert the date into a standard Date object (years 00-99 are assumed to be 2000-2099)
     return new Date(Date.UTC(2000 + year, month - 1, day, hour, minute, second));
   },
 
   // Custom date formatting function
   formatDate(date) {
-    const year = date.getUTCFullYear() - 2000;
+    const year = date.getUTCFullYear();
     const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
     const day = date.getUTCDate().toString().padStart(2, '0');
     const hour = date.getUTCHours().toString().padStart(2, '0');
     const minute = date.getUTCMinutes().toString().padStart(2, '0');
     const second = date.getUTCSeconds().toString().padStart(2, '0');
-    return `${day}/${month}/${year},${hour}:${minute}:${second}`;
+    return `${day}/${month}/${year} - ${hour}:${minute}:${second}`;
   },
 
   // Delete selected SMS messages
@@ -384,20 +513,28 @@ return {
         const encodedMessage = this.encodeUCS2(segment);
         const currentSegment = i + 1;
         const Command = `${uid},${currentSegment},${totalSegments}`;
-        const params = new URLSearchParams({
+
+        const payload = {
           number: encodedPhoneNumber,
-          msg: encodedMessage,
-          Command: Command
-        });
-        
+          message: encodedMessage,
+          command: Command
+        };
+
         try {
-          const response = await fetch(`/cgi-bin/send_sms?${params.toString()}`);
-          const data = await response.text();
+          const response = await fetch('/cgi-bin/send_sms', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await response.json();
           console.log("Response from server:", data);
 
-          if (data.includes('+CMS ERROR')) {
-            errorCode = data.match(/\+CMS ERROR: (\d+)/)?.[1];
-            console.error("SMS send error:", data);
+          if (!data.success) {
+            errorCode = data.error_code || 'unknown';
+            console.error("SMS send error:", data.message, data.output);
             allSegmentsSent = false;
             break;
           }
@@ -454,6 +591,16 @@ return {
     this.selectedMessages = event.target.checked
       ? this.messages.map((_, index) => index)
       : [];
+  },
+
+  // Toggle message expansion
+  toggleMessage(index) {
+    this.expandedMessages[index] = !this.expandedMessages[index];
+  },
+
+  // Check if message is expanded
+  isMessageExpanded(index) {
+    return this.expandedMessages[index] === true;
   }
 };
 }

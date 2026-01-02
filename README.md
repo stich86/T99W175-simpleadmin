@@ -70,3 +70,4 @@ For any questions, feature requests or support, feel free to reach out on Telegr
 
 ## Troubleshooting
 Ssh password not known : connect the modem via usb and install needed driver if windows doesnt automatically , then connect to adb using adb shell and run passwd , then you can change root password , and you can use that to access ssh.
+
