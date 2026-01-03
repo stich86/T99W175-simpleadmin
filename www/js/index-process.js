@@ -364,7 +364,7 @@ function processAllInfos() {
             // Logical: 0, 1, 2, 3 (displayed as "Antenna 1", "Antenna 2", "Antenna 3", "Antenna 4")
             // Physical: 0, 1, 2, 3 (ANT0, ANT1, ANT2, ANT3)
             const LTE_LOGICAL_TO_PHYSICAL = [0, 3, 2, 1]; // Logical 0->ANT0, Logical 1->ANT3, Logical 2->ANT2, Logical 3->ANT1
-            const NR_LOGICAL_TO_PHYSICAL = [2, 0, 1, 3];  // Different mapping for 5G
+            const NR_LOGICAL_TO_PHYSICAL = [2, 1, 0, 3];  // Logical 0->ANT2, Logical 1->ANT1, Logical 2->ANT0, Logical 3->ANT3
 
             const finalizeEntry = () => {
               if (!currentEntry) {
@@ -492,6 +492,11 @@ function processAllInfos() {
                   logicalIndex: antenna.logicalIndex,
                   physicalAntenna,
                 };
+              }).sort((a, b) => {
+                // Sort by physical antenna number
+                const aPhys = a.physicalAntenna ?? 999;
+                const bPhys = b.physicalAntenna ?? 999;
+                return aPhys - bPhys;
               });
 
               details.push(detail);

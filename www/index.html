@@ -1073,19 +1073,22 @@
                         <h6 class="fw-semibold">RSRP per Antenna</h6>
                         <template x-for="antenna in entry.antennas" :key="antenna.label">
                           <div class="mb-2">
-                            <div class="d-flex justify-content-between small">
-                              <div>
-                                <span x-text="antenna.label"></span>
-                                <template x-if="antenna.physicalAntenna !== undefined">
-                                  <span class="badge bg-secondary ms-2" x-text="'ANT' + antenna.physicalAntenna"></span>
-                                </template>
-                              </div>
-                              <span x-text="antenna.display"></span>
+                            <div class="d-flex justify-content-between small mb-1">
+                              <template x-if="antenna.physicalAntenna !== undefined">
+                                <span class="badge fs-6"
+                                  :class="{
+                                    'bg-primary': antenna.physicalAntenna === 0,
+                                    'bg-success': antenna.physicalAntenna === 1,
+                                    'bg-info': antenna.physicalAntenna === 2,
+                                    'bg-warning': antenna.physicalAntenna === 3
+                                  }"
+                                  x-text="'ANT' + antenna.physicalAntenna"></span>
+                              </template>
                             </div>
                             <template x-if="antenna.percentage > 0">
                               <div
                                 class="progress"
-                                style="height: 20px"
+                                style="height: 24px"
                                 role="progressbar"
                                 aria-valuemin="0"
                                 aria-valuemax="100"
@@ -1095,7 +1098,9 @@
                                   class="progress-bar"
                                   :class="getProgressBarClass(antenna.percentage)"
                                   :style="'width: ' + antenna.percentage + '%'"
-                                ></div>
+                                >
+                                  <span x-text="antenna.display + ' / ' + antenna.percentage + '%'"></span>
+                                </div>
                               </div>
                             </template>
                             <template x-if="antenna.percentage === 0">
