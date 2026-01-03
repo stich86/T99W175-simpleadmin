@@ -1,103 +1,208 @@
+/**
+ * Dashboard data processing and display for T99W175 modem.
+ *
+ * Provides Alpine.js component for aggregating and displaying modem status:
+ * - Signal metrics (CSQ, RSSI, RSRP, RSRQ, SINR) for LTE/NR
+ * - Network information (provider, bands, EARFCN, PCI)
+ * - IP configuration (IPv4/IPv6)
+ * - System metrics (temperature, uptime, memory, CPU)
+ * - Throughput statistics
+ * - Connection testing (ping, DNS)
+ * - Multi-cell signal aggregation
+ *
+ * @module index-process
+ * @requires Alpine.js
+ * @requires atcommand-utils.js
+ */
+
+/**
+ * Alpine.js component for dashboard status processing.
+ *
+ * Aggregates data from multiple AT commands and system endpoints to provide
+ * a comprehensive real-time view of modem status, signal quality, and performance.
+ *
+ * @returns {Object} Alpine.js component data object
+ */
 function processAllInfos() {
-const defaultDataState = {
-  atcmd: "",
-  internetConnectionStatus: "Disconnected",
-  temperature: "0",
-  simStatus: "No SIM",
-  activeSim: "No SIM",
-  networkProvider: "N/A",
-  mccmnc: "00000",
-  apn: "Unknown",
-  networkMode: "Disconnected",
-  bands: "Unknown Bands",
-  bandwidth: "Unknown Bandwidth",
-  earfcns: "000",
-  pccPCI: "0",
-  sccPCI: "-",
-  ipv4: "000.000.000.000",
-  ipv6: "0000:0000:0000:0000:0000:0000:0000:0000",
-  cellID: "Unknown",
-  eNBID: "Unknown",
-  tac: "Unknown",
-  csq: "-",
-  rssiLTE: "-",
-  rssiNR: "-",
-  rssiLTEPercentage: "0%",
-  rssiNRPercentage: "0%",
-  rsrpLTE: "-",
-  rsrpNR: "-",
-  rsrpLTEPercentage: "0%",
-  rsrpNRPercentage: "0%",
-  rsrqLTE: "-",
-  rsrqNR: "-",
-  rsrqLTEPercentage: "0%",
-  rsrqNRPercentage: "0%",
-  sinrLTE: "-",
-  sinrNR: "-",
-  sinrLTEPercentage: "0%",
-  sinrNRPercentage: "0%",
-  signalPercentage: "0",
-  signalAssessment: "Unknown",
-  uptime: "Unknown",
-  systemSpeed: "Unknown",
-  systemDuplex: "Unknown",
-  cpuUsage: 0,
-  memUsed: 0,
-  memTotal: 0,
-  memPercent: 0,
-  lastUpdate: new Date().toLocaleString(),
-  newRefreshRate: null,
-  refreshRate: 3,
-  nrDownload: "0",
-  nrUpload: "0",
-  nonNrDownload: "0",
-  nonNrUpload: "0",
-  downloadStat: "0",
-  uploadStat: "0",
-  detailedSignals: [],
-  intervalId: null,
-  phoneNumber: "Unknown",
-  imsi: "Unknown",
-  iccid: "Unknown",
-  paTemperature: "Unknown",
-  skinTemperature: "Unknown",
-  connectionDetails: {
-    ping: null,
-    dns: null
-  },
-};
+  // Default state for all dashboard data
+  const defaultDataState = {
+    // AT command buffer
+    atcmd: "",
+    // Internet connection status
+    internetConnectionStatus: "Disconnected",
+    // Modem temperature
+    temperature: "0",
+    // SIM status string
+    simStatus: "No SIM",
+    // Active SIM slot
+    activeSim: "No SIM",
+    // Network provider name
+    networkProvider: "N/A",
+    // Mobile Country Code + Mobile Network Code
+    mccmnc: "00000",
+    // Current APN
+    apn: "Unknown",
+    // Network mode (LTE/NSA/SA)
+    networkMode: "Disconnected",
+    // Active bands
+    bands: "Unknown Bands",
+    // Channel bandwidth
+    bandwidth: "Unknown Bandwidth",
+    // E-UTRA Absolute Radio Frequency Channel Number
+    earfcns: "000",
+    // Primary Cell PCI
+    pccPCI: "0",
+    // Secondary Cell PCI
+    sccPCI: "-",
+    // IPv4 address
+    ipv4: "000.000.000.000",
+    // IPv6 address
+    ipv6: "0000:0000:0000:0000:0000:0000:0000:0000",
+    // Cell ID
+    cellID: "Unknown",
+    // eNodeB ID
+    eNBID: "Unknown",
+    // Tracking Area Code
+    tac: "Unknown",
+    // Signal quality indicator
+    csq: "-",
+    // LTE Received Signal Strength Indicator
+    rssiLTE: "-",
+    // NR Received Signal Strength Indicator
+    rssiNR: "-",
+    // LTE RSSI percentage
+    rssiLTEPercentage: "0%",
+    // NR RSSI percentage
+    rssiNRPercentage: "0%",
+    // LTE Reference Signal Received Power
+    rsrpLTE: "-",
+    // NR Reference Signal Received Power
+    rsrpNR: "-",
+    // LTE RSRP percentage
+    rsrpLTEPercentage: "0%",
+    // NR RSRP percentage
+    rsrpNRPercentage: "0%",
+    // LTE Reference Signal Received Quality
+    rsrqLTE: "-",
+    // NR Reference Signal Received Quality
+    rsrqNR: "-",
+    // LTE RSRQ percentage
+    rsrqLTEPercentage: "0%",
+    // NR RSRQ percentage
+    rsrqNRPercentage: "0%",
+    // LTE Signal to Interference plus Noise Ratio
+    sinrLTE: "-",
+    // NR Signal to Interference plus Noise Ratio
+    sinrNR: "-",
+    // LTE SINR percentage
+    sinrLTEPercentage: "0%",
+    // NR SINR percentage
+    sinrNRPercentage: "0%",
+    // Overall signal percentage
+    signalPercentage: "0",
+    // Signal quality assessment
+    signalAssessment: "Unknown",
+    // System uptime
+    uptime: "Unknown",
+    // System bus speed
+    systemSpeed: "Unknown",
+    // System duplex mode
+    systemDuplex: "Unknown",
+    // CPU usage percentage
+    cpuUsage: 0,
+    // Memory used in MB
+    memUsed: 0,
+    // Total memory in MB
+    memTotal: 0,
+    // Memory usage percentage
+    memPercent: 0,
+    // Last update timestamp
+    lastUpdate: new Date().toLocaleString(),
+    // New refresh rate to apply
+    newRefreshRate: null,
+    // Current refresh rate in seconds
+    refreshRate: 3,
+    // NR (5G) download speed
+    nrDownload: "0",
+    // NR (5G) upload speed
+    nrUpload: "0",
+    // Non-NR download speed
+    nonNrDownload: "0",
+    // Non-NR upload speed
+    nonNrUpload: "0",
+    // Total download statistic
+    downloadStat: "0",
+    // Total upload statistic
+    uploadStat: "0",
+    // Detailed signal measurements for multiple cells
+    detailedSignals: [],
+    // Auto-refresh interval ID
+    intervalId: null,
+    // Phone number
+    phoneNumber: "Unknown",
+    // International Mobile Subscriber Identity
+    imsi: "Unknown",
+    // Integrated Circuit Card Identifier
+    iccid: "Unknown",
+    // Power Amplifier temperature
+    paTemperature: "Unknown",
+    // Skin temperature
+    skinTemperature: "Unknown",
+    // Connection test results
+    connectionDetails: {
+      ping: null,
+      dns: null
+    },
+  };
 
-return {
-  ...defaultDataState,
+  return {
+    // Spread default state as component data
+    ...defaultDataState,
 
-  resetData(overrides = {}) {
-    const preservedState = {
-      refreshRate: this.refreshRate,
-      newRefreshRate: this.newRefreshRate,
-      intervalId: this.intervalId,
-    };
+    /**
+     * Resets component data to defaults with optional overrides.
+     *
+     * Preserves refresh rate and interval ID while resetting all other values.
+     *
+     * @param {Object} [overrides={}] - Optional data overrides to apply
+     */
+    resetData(overrides = {}) {
+      const preservedState = {
+        refreshRate: this.refreshRate,
+        newRefreshRate: this.newRefreshRate,
+        intervalId: this.intervalId,
+      };
 
-    Object.assign(
-      this,
-      {
-        ...defaultDataState,
-        ...preservedState,
-        lastUpdate: new Date().toLocaleString(),
-      },
-      overrides
-    );
+      Object.assign(
+        this,
+        {
+          ...defaultDataState,
+          ...preservedState,
+          lastUpdate: new Date().toLocaleString(),
+        },
+        overrides
+      );
 
-    this.detailedSignals = Array.isArray(overrides.detailedSignals)
-      ? [...overrides.detailedSignals]
-      : [];
-  },
-  applyFallback(message) {
-    const fallbackMessage = message
-      ? `Unavailable (${message})`
-      : defaultDataState.activeSim;
+      this.detailedSignals = Array.isArray(overrides.detailedSignals)
+        ? [...overrides.detailedSignals]
+        : [];
+    },
 
-    this.resetData({
-      activeSim: fallbackMessage,
+    /**
+     * Applies fallback state when data retrieval fails.
+     *
+     * Resets to default state with "Unavailable" message when
+     * modem communication fails.
+     *
+     * @param {string} [message] - Optional error message to display
+     */
+    applyFallback(message) {
+      const fallbackMessage = message
+        ? `Unavailable (${message})`
+        : defaultDataState.activeSim;
+
+      this.resetData({
+        activeSim: fallbackMessage,
       signalAssessment: "Unknown",
       internetConnectionStatus: "Disconnected",
     });
@@ -105,7 +210,7 @@ return {
   async fetchAllInfo() {
     // First check if SIM is present
     const simCheckCmd = 'AT+CPIN?';
-    
+
     try {
       const simCheckResult = await ATCommandService.execute(simCheckCmd, {
         retries: 2,
@@ -114,7 +219,7 @@ return {
 
       let simReady = false;
       let simStatusText = "No SIM";
-      
+
       if (simCheckResult.ok && simCheckResult.data) {
         const simStatus = simCheckResult.data.trim();
         simReady = simStatus.includes('READY');

@@ -1,3 +1,7 @@
+/**
+ * Device Info Module
+ * Handles device information fetching and IMEI management
+ */
 function fetchDeviceInfo() {
   return {
     manufacturer: "-",
@@ -25,6 +29,11 @@ function fetchDeviceInfo() {
     imeiValidationError: "",
     isImeiValid: false,
 
+    /**
+     * Handle errors consistently
+     * @param {string} message - Error message
+     * @param {string} data - Response data
+     */
     handleError(message, data = "") {
       this.errorMessage = message;
       this.showError = true;
@@ -34,6 +43,9 @@ function fetchDeviceInfo() {
       console.error("AT command error:", message);
     },
 
+    /**
+     * Execute custom AT command
+     */
     async sendATCommand() {
       if (!this.atcmd) {
         console.log("AT Command is empty, using ATI as default command: ");
@@ -64,10 +76,14 @@ function fetchDeviceInfo() {
       }
     },
 
+    /**
+     * Fetch all device information
+     */
     async fetchATCommand() {
       this.atcmd =
         'AT+CGMI;+CGMM;^VERSION?;+CIMI;+ICCID;+CGSN;+CNUM;+CGCONTRDP=1';
       this.isLoading = true;
+
       try {
         const result = await ATCommandService.execute(this.atcmd, {
           retries: 3,
@@ -92,14 +108,23 @@ function fetchDeviceInfo() {
       }
     },
 
+    /**
+     * Fetch LAN IP from CGI
+     */
     fetchlanIp() {
       fetch("/cgi-bin/get_lanip")
         .then((res) => res.json())
         .then((data) => {
           this.lanIp = data.lanip;
+        })
+        .catch((error) => {
+          console.error("Error fetching LAN IP:", error);
         });
     },
 
+    /**
+     * Parse fetched AT command data
+     */
     parseFetchedData() {
       if (!this.atCommandResponse) {
         this.handleError("Empty AT response from the modem.");
@@ -115,7 +140,6 @@ function fetchDeviceInfo() {
       console.log("AT Command Response:", lines);
 
       let ctx = null;
-
       let manufacturer = this.manufacturer || "-";
       let modelName = this.modelName || "-";
       let firmwareVersion = this.firmwareVersion || "-";
@@ -128,8 +152,10 @@ function fetchDeviceInfo() {
 
       try {
         for (const line of lines) {
+          // Track context for multi-line responses
           if (line.startsWith("AT+")) { ctx = line; continue; }
 
+          // Parse version info
           if (line.startsWith("^VERSION:")) {
             const afterColon = line.split(":")[1]?.trim() || line;
             firmwareVersion = afterColon;
@@ -140,6 +166,7 @@ function fetchDeviceInfo() {
             continue;
           }
 
+          // Parse IP addresses
           if (line.startsWith("+CGCONTRDP:")) {
             const parts = line.split(",");
             wwanIpv4 = parts[3]?.replace(/"/g, "") || "-";
@@ -147,18 +174,28 @@ function fetchDeviceInfo() {
             continue;
           }
 
-          if (line.startsWith("ICCID:")) { iccid = line.replace("ICCID:", "").trim(); continue; }
-          if (line.startsWith("+ICCID:")) { iccid = line.split(":")[1]?.replace(/"/g, "").trim() || iccid; continue; }
+          // Parse ICCID
+          if (line.startsWith("ICCID:")) {
+            iccid = line.replace("ICCID:", "").trim();
+            continue;
+          }
+          if (line.startsWith("+ICCID:")) {
+            iccid = line.split(":")[1]?.replace(/"/g, "").trim() || iccid;
+            continue;
+          }
 
+          // Parse IMSI (15 digits)
           if (ctx?.startsWith("AT+CIMI") && /^\d{15}$/.test(line)) {
             imsi = line;
             continue;
           }
+          // Fallback IMSI detection
           if ((!imsi || imsi === "-") && /^\d{15}$/.test(line) && !line.startsWith("89") && line !== imei) {
             imsi = line;
             continue;
           }
 
+          // Parse IMEI (15-17 digits)
           if (ctx?.startsWith("AT+CGSN")) {
             const m = line.match(/(\d{15,17})/);
             if (m) { imei = m[1].slice(0, 15); }
@@ -169,11 +206,13 @@ function fetchDeviceInfo() {
             if (m) { imei = m[1].slice(0, 15); }
             continue;
           }
+          // Fallback IMEI detection
           if ((imei === "-" || !imei) && /^\d{15,17}$/.test(line) && !line.startsWith("89") && line !== imsi) {
             imei = line.slice(0, 15);
             continue;
           }
 
+          // Parse phone number
           if (line.startsWith("+CNUM:")) {
             const seg = line.split(",");
             const num = seg[1]?.replace(/"/g, "").trim();
@@ -181,14 +220,26 @@ function fetchDeviceInfo() {
             continue;
           }
 
-          if (ctx?.startsWith("AT+CGMI")) { manufacturer = line; ctx = null; continue; }
-          if (ctx?.startsWith("AT+CGMM")) { modelName = line; ctx = null; continue; }
+          // Parse manufacturer
+          if (ctx?.startsWith("AT+CGMI")) {
+            manufacturer = line;
+            ctx = null;
+            continue;
+          }
+          // Parse model name
+          if (ctx?.startsWith("AT+CGMM")) {
+            modelName = line;
+            ctx = null;
+            continue;
+          }
 
+          // Fallback manufacturer detection
           if (manufacturer === "-" && /QUALCOMM|QUECTEL|HUAWEI|FIBOCOM|Sierra/i.test(line)) {
             manufacturer = line;
           }
         }
 
+        // Update state with parsed values
         this.manufacturer = manufacturer || "-";
         this.modelName = modelName || "-";
         this.firmwareVersion = firmwareVersion || "-";
@@ -198,7 +249,7 @@ function fetchDeviceInfo() {
         this.phoneNumber = phoneNumber || "Unknown";
         this.wwanIpv4 = wwanIpv4 || "-";
         this.wwanIpv6 = wwanIpv6 || "-";
-        this.simpleAdminVersion = "T99-RC04-Final";
+        this.simpleAdminVersion = "T99-RC05-Final";
         this.showError = false;
       } catch (error) {
         console.error("Parsing error:", error);
@@ -208,7 +259,8 @@ function fetchDeviceInfo() {
       }
     },
 
-    // IMEI Modal Functions
+    // ===== IMEI Modal Functions =====
+
     openImeiModal() {
       this.showImeiWarningModal = true;
     },
@@ -232,9 +284,12 @@ function fetchDeviceInfo() {
       this.isImeiValid = false;
     },
 
+    /**
+     * Validate IMEI input
+     */
     validateImeiInput() {
       const imei = this.newImei.trim();
-      
+
       // Check if empty
       if (imei === "") {
         this.imeiValidationError = "";
@@ -288,7 +343,6 @@ function fetchDeviceInfo() {
       this.newImei = "";
       this.imeiValidationError = "";
       this.isImeiValid = false;
-
     },
 
     executeReboot() {
@@ -296,35 +350,46 @@ function fetchDeviceInfo() {
       this.rebootDevice();
     },
 
+    /**
+     * Process IMEI for AT command format
+     * @param {string} imei - 15-digit IMEI
+     * @returns {string} Formatted IMEI string
+     */
     processImei(imei) {
       const withPrefix = "80A" + imei;
-      
+
       const pairs = [];
       for (let i = 0; i < withPrefix.length; i += 2) {
         pairs.push(withPrefix.substring(i, i + 2));
       }
-      
+
       const swappedPairs = pairs.map(pair => {
         if (pair.length === 1) return pair;
         return pair[1] + pair[0];
       });
-      
+
       return swappedPairs.join(',').toLowerCase();
     },
 
+    /**
+     * Update IMEI via AT commands
+     */
     updateIMEI() {
       const formatted = this.processImei(this.newImei);
       const byteCount = formatted.split(',').length;
-      
+
       this.atcmd = `AT^NV=550,0`;
       console.log("Sending IMEI clear command:", this.atcmd);
       this.sendATCommand();
 
-      this.atcmd = `AT^NV=550,${byteCount},\"${formatted}\"`;
+      this.atcmd = `AT^NV=550,${byteCount},"${formatted}"`;
       console.log("Sending IMEI update command:", this.atcmd);
       this.sendATCommand();
     },
 
+    /**
+     * Reboot the modem
+     */
     rebootDevice() {
       this.atcmd = "AT+CFUN=1,1";
       this.sendATCommand();
@@ -332,7 +397,7 @@ function fetchDeviceInfo() {
       this.isLoading = true;
       this.isRebooting = true;
       this.countdown = 59;
-      
+
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -343,6 +408,9 @@ function fetchDeviceInfo() {
       }, 1000);
     },
 
+    /**
+     * Initialize module
+     */
     init() {
       this.fetchATCommand();
       this.fetchlanIp();

@@ -949,9 +949,6 @@
                   </table>
                 </div>
               </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-              </div>
             </div>
           </div>
         </div>
@@ -983,9 +980,6 @@
                     </tbody>
                   </table>
                 </div>
-              </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
               </div>
             </div>
           </div>
@@ -1105,9 +1099,6 @@
                   </div>
                 </template>
               </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-              </div>
             </div>
           </div>
         </div>
@@ -1199,7 +1190,7 @@
                             </tr>
                           </thead>
                           <tbody>
-                            <template x-for="result in connectionDetails.dns.results" :key="result.server">
+                            <template x-for="(result, index) in connectionDetails.dns.results" :key="result.server + '-' + result.domain + '-' + index">
                               <tr>
                                 <td x-text="result.server"></td>
                                 <td x-text="result.domain"></td>
@@ -1214,9 +1205,6 @@
                     </template>
                   </div>
                 </div>
-              </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
               </div>
             </div>
           </div>

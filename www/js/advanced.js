@@ -1,36 +1,98 @@
+/**
+ * Advanced settings management for T99W175 modem.
+ *
+ * Provides Alpine.js component for managing advanced modem settings including:
+ * - AT command terminal interface
+ * - TTL (Time To Live) override configuration
+ * - Device reboot functionality
+ * - AT command profile reset
+ *
+ * @module advanced
+ * @requires Alpine.js
+ * @requires atcommand-utils.js
+ */
+
+/**
+ * Alpine.js component for advanced settings page.
+ *
+ * Manages AT command execution, TTL override settings, and device reboot operations.
+ * Provides a terminal-like interface for sending custom AT commands and viewing responses.
+ *
+ * @returns {Object} Alpine.js component data object
+ */
 function simpleSettings() {
 return {
+    // Loading state indicator for async operations
     isLoading: false,
+    // Success message display flag
     showSuccess: false,
+    // Error message display flag
     showError: false,
+    // Clean state flag (no command output displayed)
     isClean: true,
+    // Reboot confirmation modal visibility
     showModal: false,
+    // Device rebooting state
     isRebooting: false,
+    // Current AT command input value
     atcmd: "",
+    // AT command for fetching current settings
     fetchATCommand: "",
+    // Reboot countdown timer value
     countdown: 0,
+    // AT command response output
     atCommandResponse: "",
+    // Current settings response output
     currentSettingsResponse: "",
+    // Error message text
     errorMessage: "",
+    // TTL data from server
     ttldata: null,
+    // Current TTL value
     ttlvalue: 0,
+    // TTL override enabled status
     ttlStatus: false,
+    // New TTL value to set
     newTTL: null,
+    // IP Passthrough mode selection (deprecated/unused)
     ipPassMode: "Unspecified",
+    // IP Passthrough status (deprecated/unused)
     ipPassStatus: false,
+    // USB network mode selection (deprecated/unused)
     usbNetMode: "Unspecified",
+    // Current USB network mode (deprecated/unused)
     currentUsbNetMode: "Unknown",
+    // DNS proxy status (deprecated/unused)
     DNSProxyStatus: true,
 
+    /**
+     * Closes the reboot confirmation modal.
+     *
+     * Resets modal visibility flags to hide the dialog.
+     */
     closeModal() {
     this.confirmModal = false;
     this.showModal = false;
     },
 
+    /**
+     * Displays the reboot confirmation modal.
+     *
+     * Sets the modal visibility flag to show the confirmation dialog.
+     */
     showRebootModal() {
     this.showModal = true;
     },
 
+    /**
+     * Handles AT command execution errors.
+     *
+     * Displays error message and optionally captures response data.
+     * Logs error to console and resets loading state.
+     *
+     * @param {string} message - Error message to display
+     * @param {string} [data=""] - Optional response data to capture
+     */
     handleAtError(message, data = "") {
     this.errorMessage = message;
     this.showError = true;
@@ -41,6 +103,16 @@ return {
     console.error("AT command error:", message);
     },
 
+    /**
+     * Executes an AT command via the ATCommandService.
+     *
+     * Sends the current AT command to the modem with retry logic.
+     * Uses "ATI" as default if no command is specified.
+     * Updates the response display on success or shows error on failure.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async sendATCommand() {
     if (!this.atcmd) {
         // Use ATI as default command
@@ -78,6 +150,16 @@ return {
     }
     },
 
+    /**
+     * Executes a user AT command via the user_atcommand CGI endpoint.
+     *
+     * Sends the current AT command using the user_atcommand CGI script,
+     * which strips ANSI escape sequences for cleaner terminal output.
+     * Displays the formatted response or error message.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async sendUserATCommand() {
     this.isLoading = true;
     const encodedATCmd = encodeURIComponent(this.atcmd);
@@ -85,13 +167,13 @@ return {
 
     try {
         const response = await fetch(url);
-        
+
         if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
         // Display output directly (already formatted)
         this.atCommandResponse = data.output;
@@ -102,7 +184,7 @@ return {
         this.atCommandResponse = `ERROR: ${data.message}`;
         this.showError = true;
         }
-        
+
     } catch (error) {
         this.handleAtError(
         error.message || "Network error while executing the custom command."
@@ -112,11 +194,23 @@ return {
     }
     },
 
+    /**
+     * Clears the AT command response display.
+     *
+     * Resets the command output area and returns to clean state.
+     */
     clearResponses() {
     this.atCommandResponse = "";
     this.isClean = true;
     },
 
+    /**
+     * Reboots the modem device.
+     *
+     * Sends AT+CFUN=1,1 command to reset the modem functionality.
+     * Initiates a 40-second countdown timer and reinitializes on completion.
+     * Clears response display and shows rebooting state.
+     */
     rebootDevice() {
     this.atcmd = "AT+CFUN=1,1";
     this.sendATCommand();
@@ -137,6 +231,12 @@ return {
     }, 1000);
     },
 
+    /**
+     * Resets AT command profile to factory defaults.
+     *
+     * Sends AT&F command to restore default AT command profile.
+     * Clears command output and prompts user to reboot device.
+     */
     resetATCommands() {
     this.atcmd = "AT&F";
     this.sendATCommand();
@@ -145,129 +245,20 @@ return {
     this.atCommandResponse = "";
     this.showRebootModal();
     },
-/*
-    ipPassThroughEnable() {
-    if (this.ipPassMode != "Unspecified") {
-        if (this.ipPassMode == "ETH") {
-        this.atcmd =
-            // at+qmap="mpdn_rule",0,1,1,1,1,"FF:FF:FF:FF:FF:FF"
-            'AT+QMAP="MPDN_RULE",0,1,0,1,1,"FF:FF:FF:FF:FF:FF"';
-        this.sendATCommand();
-        } else if (this.ipPassMode == "USB") {
-        this.atcmd =
-            'AT+QMAP="MPDN_RULE",0,1,0,3,1,"FF:FF:FF:FF:FF:FF"';
-        this.sendATCommand();
-        } else {
-        console.error("Invalid IP Passthrough Mode");
-        }
-    } else {
-        console.error("IP Passthrough Mode not specified");
-    }
-    },
 
-    ipPassThroughDisable() {
-    this.atcmd = 'AT+QMAP="MPDN_RULE",0;+QMAPWAC=1';
-    this.sendATCommand();
-    },
+    // NOTE: The following functions are commented out as they are deprecated or unused.
+    // They are kept for reference purposes in case they are needed in the future.
+    // - ipPassThroughEnable/disable: IP Passthrough configuration
+    // - onBoardDNSProxyEnable/disable: DNS proxy configuration
+    // - usbNetModeChanger: USB network mode configuration
+    // - fetchCurrentSettings: Fetch current network settings
 
-    async onBoardDNSProxyEnable() {
-    this.atcmd = 'AT+QMAP="DHCPV4DNS","enable"';
-    const result = await this.sendATCommand();
-    if (result && result.ok) {
-        await this.fetchCurrentSettings();
-    }
-    },
-
-    async onBoardDNSProxyDisable() {
-    this.atcmd = 'AT+QMAP="DHCPV4DNS","disable"';
-    const result = await this.sendATCommand();
-    if (result && result.ok) {
-        await this.fetchCurrentSettings();
-    }
-    },
-
-    usbNetModeChanger() {
-    if (this.usbNetMode != "Unspecified") {
-        if (this.usbNetMode == "RMNET") {
-        this.atcmd = 'AT+QCFG="usbnet",0;';
-        this.sendATCommand();
-        } else if (this.usbNetMode == "ECM") {
-        this.atcmd = 'AT+QCFG="usbnet",1;';
-        this.sendATCommand();
-        } else if (this.usbNetMode == "MBIM") {
-        this.atcmd = 'AT+QCFG="usbnet",2;';
-        this.sendATCommand();
-        } else if (this.usbNetMode == "RNDIS") {
-        this.atcmd = 'AT+QCFG="usbnet",3;';
-        this.sendATCommand();
-        } else {
-        console.log("USB Net Mode Invalid");
-        }
-    } else {
-        console.error("USB Net Mode not specified");
-    }
-    this.rebootDevice();
-    },
-
-    async fetchCurrentSettings() {
-    this.fetchATCommand =
-        'AT+QMAP="MPDN_RULE";+QMAP="DHCPV4DNS";+QCFG="usbnet"';
-
-    try {
-        const result = await ATCommandService.execute(this.fetchATCommand, {
-        retries: 2,
-        timeout: 12000,
-        });
-
-        if (!result.ok || !result.data) {
-        const message = result.error
-            ? result.error.message
-            : 'Unable to fetch current settings.';
-        this.errorMessage = message;
-        console.warn('fetchCurrentSettings error:', message);
-        return;
-        }
-
-        this.currentSettingsResponse = result.data;
-        const currentData = result.data.split("\n");
-
-        const getLine = (index) => (currentData[index] ? currentData[index] : '');
-
-        const testEthpass = getLine(1).match(/\+QMAP: \"MPDN_rule\",0,0,0,0,0/);
-
-        this.ipPassStatus = !testEthpass;
-
-        const testDNSProxy = getLine(6).match(/\+QMAP: \"DHCPV4DNS\","enable"/);
-
-        this.DNSProxyStatus = Boolean(testDNSProxy);
-
-        const testUSBNet = getLine(8).match(/\+QCFG: \"usbnet\",(\d)/);
-
-        if (testUSBNet && testUSBNet[1] !== undefined) {
-        const mode = testUSBNet[1];
-        if (mode === '0') {
-            this.currentUsbNetMode = 'RMNET';
-        } else if (mode === '1') {
-            this.currentUsbNetMode = 'ECM';
-        } else if (mode === '2') {
-            this.currentUsbNetMode = 'MBIM';
-        } else if (mode === '3') {
-            this.currentUsbNetMode = 'RNDIS';
-        } else {
-            this.currentUsbNetMode = 'Unknown';
-        }
-        } else {
-        this.currentUsbNetMode = 'Unknown';
-        }
-
-        this.atcmd = '';
-    } catch (error) {
-        this.errorMessage = error.message || 'Network error while retrieving current settings.';
-        console.error('Error in fetchCurrentSettings:', error);
-    }
-    },
-
-*/
+    /**
+     * Fetches current TTL override status and value.
+     *
+     * Queries the get_ttl_status CGI endpoint to retrieve TTL configuration.
+     * Updates ttldata, ttlStatus, and ttlvalue properties with response data.
+     */
     fetchTTL() {
     fetch("/cgi-bin/get_ttl_status")
         .then((res) => res.json())
@@ -278,6 +269,12 @@ return {
         });
     },
 
+    /**
+     * Sets new TTL override value.
+     *
+     * Sends new TTL value to set_ttl CGI endpoint.
+     * Refreshes TTL status after update and handles loading state.
+     */
     setTTL() {
     this.isLoading = true; // Set loading state while updating TTL
     const ttlval = this.newTTL;
@@ -299,6 +296,13 @@ return {
         this.isLoading = false; // Ensure loading state is properly handled in case of error
         });
     },
+
+    /**
+     * Initializes the advanced settings component.
+     *
+     * Loads initial TTL configuration on component mount.
+     * Note: fetchCurrentSettings is disabled as those features are deprecated.
+     */
     init() {
     //this.fetchCurrentSettings();
     this.fetchTTL();

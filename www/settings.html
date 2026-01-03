@@ -164,9 +164,15 @@
 
         <div class="row mt-5">
           <div class="col-12">
-            
+
             <template x-if="loadError">
               <div class="alert alert-danger" role="alert" x-text="loadError"></div>
+            </template>
+
+            <template x-if="pendingRestartWarning">
+              <div class="alert alert-warning" role="alert">
+                <strong>⚠️ Restart Required:</strong> Changes to network settings or WAN Connection will require a modem restart to take effect.
+              </div>
             </template>
 
             <template x-if="successMessage">
@@ -175,6 +181,16 @@
 
             <template x-if="restartMessage">
               <div class="alert" :class="restartStatusClass" role="alert" x-text="restartMessage"></div>
+            </template>
+
+            <template x-if="validationErrors.length > 0">
+              <div class="alert alert-danger" role="alert">
+                <ul class="mb-0">
+                  <template x-for="error in validationErrors" :key="error">
+                    <li x-text="error"></li>
+                  </template>
+                </ul>
+              </div>
             </template>
 
             <template x-if="isLoading">
@@ -240,10 +256,15 @@
                           class="form-check-input"
                           type="checkbox"
                           role="switch"
-                          :disabled="isSaving"
+                          :disabled="isSaving || form.bridgeEnabled"
                           x-model="form.dhcpEnabled"
                         />
-                        <label class="form-check-label" for="dhcpEnabled">Enable DHCP server</label>
+                        <label class="form-check-label" for="dhcpEnabled">
+                          Enable DHCP server
+                          <template x-if="form.bridgeEnabled">
+                            <span class="text-muted small ms-0">(required in bridge mode)</span>
+                          </template>
+                        </label>
                       </div>
 
                       <div class="row g-3 mt-1">
@@ -256,7 +277,7 @@
                             type="text"
                             inputmode="decimal"
                             autocomplete="off"
-                            :disabled="isSaving || !form.dhcpEnabled"
+                            :disabled="isSaving || !form.dhcpEnabled || form.bridgeEnabled"
                             x-model.trim="form.dhcpStart"
                             @input="dhcpRangeEdited = true; validateIpField('dhcpStart', form.dhcpStart)"
                           />
@@ -273,7 +294,7 @@
                             type="text"
                             inputmode="decimal"
                             autocomplete="off"
-                            :disabled="isSaving || !form.dhcpEnabled"
+                            :disabled="isSaving || !form.dhcpEnabled || form.bridgeEnabled"
                             x-model.trim="form.dhcpEnd"
                             @input="dhcpRangeEdited = true; validateIpField('dhcpEnd', form.dhcpEnd)"
                           />
@@ -293,7 +314,7 @@
                             type="number"
                             min="60"
                             step="60"
-                            :disabled="isSaving || !form.dhcpEnabled"
+                            :disabled="isSaving || !form.dhcpEnabled || form.bridgeEnabled"
                             x-model.trim="form.dhcpLease"
                             @input="validateDhcpLease(form.dhcpLease)"
                           />
@@ -413,89 +434,135 @@
                 <!-- Right Column: TTL & Reboot -->
                 <div class="col-lg-6">
                   
-                  <!-- Custom TTL -->
-                <div class="card">
-                  <div class="card-header">Custom TTL</div>
-                  <div class="card-body">
+                  <!-- WAN Connection -->
+                  <div class="card">
+                    <div class="card-header">WAN Connection</div>
+                    <div class="card-body">
 
-                    <template x-if="ttlSuccessMessage">
-                      <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
-                        <span x-text="ttlSuccessMessage"></span>
-                        <button type="button" class="btn-close" @click="ttlSuccessMessage = ''"></button>
-                      </div>
-                    </template>
-
-                    <template x-if="ttlErrorMessage">
-                      <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
-                        <span x-text="ttlErrorMessage"></span>
-                        <button type="button" class="btn-close" @click="ttlErrorMessage = ''"></button>
-                      </div>
-                    </template>
-
-                    <p class="text-body-secondary mb-3">
-                      Set up a custom time-to-live for each outbound packet.
-                    </p>
-
-                    <div class="form-check form-switch mb-3">
-                      <input
-                        id="ttlEnabled"
-                        class="form-check-input"
-                        type="checkbox"
-                        role="switch"
-                        :disabled="ttlSaving"
-                        x-model="ttlForm.enabled"
-                        @change="onTTLToggle"
-                      />
-                      <label class="form-check-label" for="ttlEnabled">
-                        Enable Custom TTL
-                        <span x-show="ttlSaving" class="spinner-border spinner-border-sm ms-2" role="status"></span>
-                      </label>
-                    </div>
-
-                    <div x-show="ttlForm.enabled">
-                      <div class="row g-3 mt-1">
-                        <div class="col-md-8">
-                          <label class="form-label" for="ttlValue">TTL Value</label>
-                          <div class="input-group">
-                            <input
-                              id="ttlValue"
-                              class="form-control"
-                              type="number"
-                              min="1"
-                              max="255"
-                              inputmode="numeric"
-                              autocomplete="off"
-                              placeholder="64"
-                              x-model.number="ttlForm.value"
-                              @keydown.enter="applyTTL"
-                            />
-                            <button
-                              class="btn btn-primary"
-                              type="button"
-                              :disabled="ttlSaving || !ttlForm.enabled || ttlForm.value === currentTtlSettings.value"
-                              @click="applyTTL"
-                            >
-                              <span x-show="!ttlSaving">Apply</span>
-                              <span x-show="ttlSaving">
-                                <span class="spinner-border spinner-border-sm" role="status"></span>
-                              </span>
-                            </button>
-                          </div>
-                          <div class="form-text">
-                            Set a value between 1 and 255. Changes are applied immediately without restarting the modem.
-                          </div>
+                      <div class="mb-3">
+                        <div class="form-check form-switch">
+                          <input
+                            id="autoConnect"
+                            class="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            :disabled="isSaving"
+                            x-model="form.autoConnect"
+                          />
+                          <label class="form-check-label" for="autoConnect">
+                            Enable Auto Connect
+                          </label>
+                        </div>
+                        <div class="form-text text-muted ps-0 mt-3">
+                          Automatically connect to the mobile network when the modem starts.
                         </div>
                       </div>
-                      
-                      <template x-if="ttlForm.enabled && ttlForm.value">
-                        <div class="alert alert-info mt-3" role="alert">
-                          <strong>Custom TTL is applied:</strong> Packets will be sent with TTL value of <span x-text="ttlForm.value"></span>.
+
+                      <div class="mb-3">
+                        <div class="form-check form-switch">
+                          <input
+                            id="roamingEnabled"
+                            class="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            :disabled="isSaving"
+                            x-model="form.roamingEnabled"
+                          />
+                          <label class="form-check-label" for="roamingEnabled">
+                            Enable Roaming
+                          </label>
                         </div>
-                      </template>
+                        <div class="form-text text-warning ps-0 mt-3">
+                          ⚠️ Enabling roaming may incur additional charges depending on your mobile plan. Please check with your carrier before enabling.
+                        </div>
+                      </div>
 
                     </div>
                   </div>
-                </div>
+
+                  <!-- Custom TTL -->
+                  <div class="card mt-4">
+                    <div class="card-header">Custom TTL</div>
+                    <div class="card-body">
+
+                      <template x-if="ttlSuccessMessage">
+                        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                          <span x-text="ttlSuccessMessage"></span>
+                          <button type="button" class="btn-close" @click="ttlSuccessMessage = ''"></button>
+                        </div>
+                      </template>
+
+                      <template x-if="ttlErrorMessage">
+                        <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                          <span x-text="ttlErrorMessage"></span>
+                          <button type="button" class="btn-close" @click="ttlErrorMessage = ''"></button>
+                        </div>
+                      </template>
+
+                      <p class="text-body-secondary mb-3">
+                        Set up a custom time-to-live for each outbound packet.
+                      </p>
+
+                      <div class="form-check form-switch mb-3">
+                        <input
+                          id="ttlEnabled"
+                          class="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          :disabled="ttlSaving"
+                          x-model="ttlForm.enabled"
+                          @change="onTTLToggle"
+                        />
+                        <label class="form-check-label" for="ttlEnabled">
+                          Enable Custom TTL
+                          <span x-show="ttlSaving" class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                        </label>
+                      </div>
+
+                      <div x-show="ttlForm.enabled">
+                        <div class="row g-3 mt-1">
+                          <div class="col-md-8">
+                            <label class="form-label" for="ttlValue">TTL Value</label>
+                            <div class="input-group">
+                              <input
+                                id="ttlValue"
+                                class="form-control"
+                                type="number"
+                                min="1"
+                                max="255"
+                                inputmode="numeric"
+                                autocomplete="off"
+                                placeholder="64"
+                                x-model.number="ttlForm.value"
+                                @keydown.enter="applyTTL"
+                              />
+                              <button
+                                class="btn btn-primary"
+                                type="button"
+                                :disabled="ttlSaving || !ttlForm.enabled || ttlForm.value === currentTtlSettings.value"
+                                @click="applyTTL"
+                              >
+                                <span x-show="!ttlSaving">Apply</span>
+                                <span x-show="ttlSaving">
+                                  <span class="spinner-border spinner-border-sm" role="status"></span>
+                                </span>
+                              </button>
+                            </div>
+                            <div class="form-text">
+                              Set a value between 1 and 255. Changes are applied immediately without restarting the modem.
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <template x-if="ttlForm.enabled && ttlForm.value">
+                          <div class="alert alert-info mt-3" role="alert">
+                            <strong>Custom TTL is applied:</strong> Packets will be sent with TTL value of <span x-text="ttlForm.value"></span>.
+                          </div>
+                        </template>
+
+                      </div>
+                    </div>
+                  </div>                
 
                   <!-- Automatic Reboot -->
                   <div class="card mt-4">
@@ -669,6 +736,7 @@
                       </div>
                     </div>
                   </div>
+                  
                 </div>
               </div>
 
@@ -692,7 +760,7 @@
                   </template>
 
                   <p class="text-body-secondary mb-3">
-                    Configure ping targets and DNS resolution tests for connection monitoring.
+                    Configure ping targets and DNS resolution tests for connection monitoring (Home Icon).
                   </p>
 
                   <div class="mb-4">
@@ -734,7 +802,7 @@
                       :disabled="connectionConfigSaving"
                       @click="saveConnectionConfig()"
                     >
-                      <span x-show="!connectionConfigSaving">Save Configuration</span>
+                      <span x-show="!connectionConfigSaving">Apply</span>
                       <span x-show="connectionConfigSaving">
                         <span class="spinner-border spinner-border-sm" role="status"></span>
                         Saving...
@@ -761,15 +829,12 @@
 
                   <div class="card">
                     <div class="card-footer">
-                      <div class="d-flex justify-content-between align-items-center">
-                        <small class="text-muted">
-                          Saving the configuration will restart the modem to apply the changes.
-                        </small>
+                      <div class="d-flex justify-content-end">
                         <div class="d-flex gap-2">
                           <button type="button" class="btn btn-danger" :disabled="isSaving" @click="resetForm">Reset</button>
                           <button type="submit" class="btn btn-primary" :disabled="isSaving">
                             <template x-if="!isSaving">
-                              <span>Save changes</span>
+                              <span>Save Configuration</span>
                             </template>
                             <template x-if="isSaving">
                               <span class="d-flex align-items-center gap-2">
@@ -784,6 +849,64 @@
                   </div>
                 </div>
               </div>
+
+            <!-- Save Confirmation Modal -->
+      <div class="modal-overlay" x-cloak x-show="showSaveConfirmModal" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+        <div class="modern-confirm-modal" @click.stop>
+          <div class="modern-confirm-content">
+            <div class="modern-confirm-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="48" height="48">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            </div>
+            <h4 class="modern-confirm-title">Settings Saved Successfully!</h4>
+            <p class="modern-confirm-text">
+              Your network configuration has been saved.
+            </p>
+            <div class="modern-confirm-warning" x-show="requiresRestart">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span>Modem restart required for changes to take effect.</span>
+            </div>
+            <div class="modern-confirm-buttons">
+              <button type="button" class="btn btn-secondary" @click="cancelRestart()">
+                Reboot Later
+              </button>
+              <button type="button" class="btn btn-primary" @click="confirmRestart()">
+                Reboot Now
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reboot Progress Modal -->
+      <div class="modal-overlay" x-cloak x-show="showRebootModal" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+        <div class="modern-loading-modal" @click.stop>
+          <div class="modern-loader-container">
+            <div class="modern-loader">
+              <svg class="modern-loader-svg" viewBox="0 0 50 50">
+                <circle class="modern-loader-circle" cx="25" cy="25" r="20"></circle>
+              </svg>
+            </div>
+            <div class="modern-loading-content">
+              <h4 class="modern-loading-title">Restarting Modem</h4>
+              <p class="modern-loading-text">
+                Please wait while the modem restarts...
+              </p>
+              <div class="modern-countdown">
+                <span class="modern-countdown-number" x-text="rebootCountdown"></span>
+                <span class="modern-countdown-label">seconds remaining</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
             </form>
           </div>
         </div>

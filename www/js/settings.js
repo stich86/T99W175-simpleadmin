@@ -1,26 +1,78 @@
+/**
+ * Network settings configuration for T99W175 modem.
+ *
+ * Provides Alpine.js component for managing modem network settings:
+ * - LAN IP address and subnet mask configuration
+ * - DHCP server settings (range, lease time)
+ * - DMZ (Demilitarized Zone) configuration
+ * - IPv6 and bridge mode settings
+ * - TTL override configuration
+ * - Scheduled reboot management
+ * - Connection monitoring configuration
+ * - ARP table management
+ *
+ * @module settings
+ * @requires Alpine.js
+ * @requires atcommand-utils.js
+ */
+
+/**
+ * Registers the networkSettings Alpine.js component.
+ *
+ * Supports both dynamic loading and normal page load scenarios.
+ * Returns Alpine data definition function.
+ *
+ * @returns {Function} Alpine.data registration function
+ */
 // Support both dynamic loading and normal page load
 function registerNetworkSettings() {
+  /**
+   * Alpine.js component factory for network settings.
+   *
+   * Manages network configuration including LAN IP, DHCP, DMZ,
+   * bridge mode, TTL override, reboot scheduling, and monitoring.
+   *
+   * @returns {Object} Alpine.js component data object
+   */
   Alpine.data("networkSettings", () => ({
+    // Loading state for configuration operations
     isLoading: false,
+    // Saving state for network configuration
     isSaving: false,
+    // Error message from loading configuration
     loadError: "",
+    // Success message for configuration changes
     successMessage: "",
+    // Restart notification message
     restartMessage: "",
+    // CSS class for restart status alert
     restartStatusClass: "alert-info",
+    // Array of validation error messages
     validationErrors: [],
+    // Flag indicating DHCP range was manually edited
     dhcpRangeEdited: false,
+    // Original configuration data for comparison
     originalData: null,
+    // TTL save in progress flag
     ttlSaving: false,
+    // TTL save success message
     ttlSuccessMessage: "",
+    // TTL save error message
     ttlErrorMessage: "",
+    // TTL configuration form data
     ttlForm: {
       enabled: false,
       value: 64
     },
+    // Reboot configuration save in progress
     rebootSaving: false,
+    // Reboot save success message
     rebootSuccessMessage: "",
+    // Reboot save error message
     rebootErrorMessage: "",
+    // Current reboot schedule string
     rebootSchedule: "",
+    // Reboot configuration form data
     rebootForm: {
       enabled: false,
       mode: "interval",
@@ -30,17 +82,23 @@ function registerNetworkSettings() {
       dayOfMonth: 1,
       time: "00:00",
     },
+    // Connection config save in progress
     connectionConfigSaving: false,
+    // Connection config success message
     connectionConfigSuccessMessage: "",
+    // Connection config error message
     connectionConfigErrorMessage: "",
+    // Connection monitoring configuration form
     connectionConfigForm: {
       pingTargets: "",
       dnsTests: "",
     },
+    // Current TTL settings from server
     currentTtlSettings: {
       enabled: false,
       value: 0,
     },
+    // Subnet mask dropdown options
     maskOptions: [
       { value: "255.255.255.0", label: "/24 (255.255.255.0)" },
       { value: "255.255.255.128", label: "/25 (255.255.255.128)" },
@@ -50,6 +108,7 @@ function registerNetworkSettings() {
       { value: "255.255.255.248", label: "/29 (255.255.255.248)" },
       { value: "255.255.255.252", label: "/30 (255.255.255.252)" },
     ],
+    // Main network configuration form data
     form: {
       ipAddress: "",
       subnetMask: "255.255.255.0",
@@ -62,7 +121,10 @@ function registerNetworkSettings() {
       ipv6Enabled: true,
       bridgeEnabled: false,
       bridgeMac: "",
+      autoConnect: true,
+      roamingEnabled: false,
     },
+    // IP address validation error flags
     ipErrors: {
       ipAddress: false,
       dhcpStart: false,
@@ -70,14 +132,75 @@ function registerNetworkSettings() {
       dmzIp: false,
       dhcpLease: false,
     },
+    // ARP table entries array
     arpEntries: [],
+    // Flag showing if there are pending changes that require restart
+    pendingRestartWarning: false,
+    // Save confirmation modal visibility
+    showSaveConfirmModal: false,
+    // Reboot progress modal visibility
+    showRebootModal: false,
+    // Flag indicating if restart is required
+    requiresRestart: false,
+    // Reboot countdown timer
+    rebootCountdown: 60,
+    // Reboot countdown interval
+    rebootInterval: null,
+
+    /**
+     * Initializes network settings component.
+     *
+     * Loads current configuration, TTL settings, reboot schedule,
+     * connection config, and ARP entries on component mount.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async init() {
       await this.fetchConfiguration();
       await this.fetchTtlSettings();
       await this.loadRebootSchedule();
       await this.fetchConnectionConfig();
       await this.fetchArpEntries();
+
+      // Watch for changes to form fields that require restart
+      this.$watch('form', () => this.checkPendingRestart(), { deep: true });
     },
+
+    /**
+     * Checks if any reboot-requiring settings have changed
+     */
+    checkPendingRestart() {
+      if (!this.originalData) {
+        this.pendingRestartWarning = false;
+        return;
+      }
+
+      const networkChanged =
+        this.form.ipAddress !== this.originalData.ipAddress ||
+        this.form.subnetMask !== this.originalData.subnetMask ||
+        this.form.dhcpEnabled !== this.originalData.dhcpEnabled ||
+        this.form.dhcpStart !== this.originalData.dhcpStart ||
+        this.form.dhcpEnd !== this.originalData.dhcpEnd ||
+        this.form.dhcpLease !== this.originalData.dhcpLease ||
+        this.form.dmzEnabled !== this.originalData.dmzEnabled ||
+        this.form.dmzIp !== this.originalData.dmzIp ||
+        this.form.ipv6Enabled !== this.originalData.ipv6Enabled ||
+        this.form.bridgeEnabled !== this.originalData.bridgeEnabled ||
+        this.form.bridgeMac !== this.originalData.bridgeMac;
+
+      const wanConnectionChanged =
+        this.form.autoConnect !== this.originalData.autoConnect ||
+        this.form.roamingEnabled !== this.originalData.roamingEnabled;
+
+      this.pendingRestartWarning = networkChanged || wanConnectionChanged;
+    },
+
+    /**
+     * Resets all status messages.
+     *
+     * Clears success, error, and restart notification messages.
+     */
     resetMessages() {
       this.successMessage = "";
       this.restartMessage = "";
@@ -101,6 +224,8 @@ function registerNetworkSettings() {
       this.form.ipv6Enabled = Boolean(data.ipv6Enabled);
       this.form.bridgeEnabled = Boolean(data.bridgeEnabled);
       this.form.bridgeMac = data.bridgeMac || "";
+      this.form.autoConnect = data.autoConnect !== undefined ? Boolean(data.autoConnect) : true;
+      this.form.roamingEnabled = data.roamingEnabled !== undefined ? Boolean(data.roamingEnabled) : false;
       this.originalData = JSON.parse(JSON.stringify(this.form));
       this.dhcpRangeEdited = false;
     },
@@ -208,15 +333,7 @@ function registerNetworkSettings() {
     },
     async onTTLToggle() {
       if (!this.ttlForm.enabled) {
-        const confirmed = window.confirm(
-          "Are you sure you want to disable Custom TTL?"
-        )
-        if (!confirmed) {
-          this.ttlForm.enabled = true
-          return
-        }
-
-        // Disable TTL
+        // Disable TTL without confirmation
         await this.disableTTL()
         return
       }
@@ -241,8 +358,6 @@ function registerNetworkSettings() {
         
         this.ttlForm.enabled = this.currentTtlSettings.enabled;
         this.ttlForm.value = this.currentTtlSettings.enabled ? this.currentTtlSettings.value : 64;
-        
-        console.log("TTL settings loaded:", this.currentTtlSettings);
       } catch (error) {
         console.error("Error loading TTL settings:", error);
         this.currentTtlSettings.enabled = false;
@@ -499,6 +614,11 @@ function registerNetworkSettings() {
         this.rebootForm.enabled = false;
         this.resetRebootForm();
         this.rebootSuccessMessage = "Schedule removed.";
+
+        // Auto-hide message after 5 seconds
+        setTimeout(() => {
+          this.rebootSuccessMessage = "";
+        }, 5000);
       } catch (error) {
         console.error("Error while deleting the schedule", error);
         this.rebootErrorMessage =
@@ -654,6 +774,7 @@ function registerNetworkSettings() {
     async saveSettings() {
       this.successMessage = "";
       this.restartMessage = "";
+      this.showSaveConfirmModal = false;
 
       if (!this.validateForm()) {
         return;
@@ -669,6 +790,11 @@ function registerNetworkSettings() {
         );
         if (!confirmed) {
           return;
+        }
+
+        // Ensure DHCP is enabled when bridge mode is activated
+        if (!this.form.dhcpEnabled) {
+          this.form.dhcpEnabled = true;
         }
       }
 
@@ -692,6 +818,8 @@ function registerNetworkSettings() {
         ? this.form.bridgeMac.trim().toUpperCase()
         : "0";
       params.set("bridge_mac", bridgeMacValue);
+      params.set("auto_connect", this.form.autoConnect ? "1" : "0");
+      params.set("roaming_enabled", this.form.roamingEnabled ? "1" : "0");
 
       this.isSaving = true;
       const controller = new AbortController();
@@ -720,10 +848,33 @@ function registerNetworkSettings() {
           throw new Error(payload.message + details);
         }
 
-        this.successMessage = payload.message || "Network configuration updated.";
-        await this.handleRestart();
-        await this.fetchConfiguration(false);
-        await this.fetchTtlSettings();
+        // Check if any settings changed that require restart
+        const networkChanged =
+          this.originalData && (
+            this.form.ipAddress !== this.originalData.ipAddress ||
+            this.form.subnetMask !== this.originalData.subnetMask ||
+            this.form.dhcpEnabled !== this.originalData.dhcpEnabled ||
+            this.form.dhcpStart !== this.originalData.dhcpStart ||
+            this.form.dhcpEnd !== this.originalData.dhcpEnd ||
+            this.form.dhcpLease !== this.originalData.dhcpLease ||
+            this.form.dmzEnabled !== this.originalData.dmzEnabled ||
+            this.form.dmzIp !== this.originalData.dmzIp ||
+            this.form.ipv6Enabled !== this.originalData.ipv6Enabled ||
+            this.form.bridgeEnabled !== this.originalData.bridgeEnabled ||
+            this.form.bridgeMac !== this.originalData.bridgeMac
+          );
+
+        const wanConnectionChanged =
+          this.originalData && (
+            this.form.autoConnect !== this.originalData.autoConnect ||
+            this.form.roamingEnabled !== this.originalData.roamingEnabled
+          );
+
+        this.requiresRestart = networkChanged || wanConnectionChanged;
+
+        // Show confirmation modal
+        this.showSaveConfirmModal = true;
+
       } catch (error) {
         console.error("Unable to save network settings", error);
         this.restartMessage = "";
@@ -744,7 +895,18 @@ function registerNetworkSettings() {
         this.isSaving = false;
       }
     },
-    async handleRestart() {
+    cancelRestart() {
+      this.showSaveConfirmModal = false;
+      this.requiresRestart = false;
+      this.pendingRestartWarning = false;
+      // Reload page to refresh configuration
+      window.location.reload();
+    },
+    async confirmRestart() {
+      this.showSaveConfirmModal = false;
+      this.showRebootModal = true;
+      this.rebootCountdown = 60;
+
       try {
         const result = await ATCommandService.execute("AT+CFUN=1,1", {
           endpoint: "/cgi-bin/user_atcommand",
@@ -752,22 +914,31 @@ function registerNetworkSettings() {
           timeout: 20000,
         });
 
-        if (result.ok) {
-          this.restartStatusClass = "alert-info";
-          this.restartMessage = "Modem restart command sent. Please wait for the connection to resume.";
-        } else {
+        if (!result.ok) {
           const reason = result.error && result.error.message ? result.error.message : "unknown error";
-          this.restartStatusClass = "alert-warning";
-          this.restartMessage = `Configuration saved but the modem restart failed: ${reason}`;
+          this.showRebootModal = false;
+          this.validationErrors.push(`Modem restart failed: ${reason}`);
+          return;
         }
       } catch (error) {
         console.error("Unable to restart the modem", error);
-        this.restartStatusClass = "alert-warning";
-        this.restartMessage =
+        this.showRebootModal = false;
+        this.validationErrors.push(
           error && error.message
-            ? `Configuration saved but the modem restart failed: ${error.message}`
-            : "Configuration saved but the modem restart failed.";
+            ? `Modem restart failed: ${error.message}`
+            : "Modem restart failed."
+        );
+        return;
       }
+
+      // Start countdown
+      this.rebootInterval = setInterval(() => {
+        this.rebootCountdown--;
+        if (this.rebootCountdown <= 0) {
+          clearInterval(this.rebootInterval);
+          window.location.reload();
+        }
+      }, 1000);
     },
     async fetchConnectionConfig() {
       try {
@@ -842,7 +1013,6 @@ function registerNetworkSettings() {
 // Register the component - supports both normal and dynamic loading
 if (typeof Alpine !== 'undefined' && Alpine.version) {
   // Alpine is already initialized (dynamic loading), register immediately
-  console.log('Alpine already initialized, registering networkSettings component directly');
   registerNetworkSettings();
 } else {
   // Alpine not yet initialized (normal page load), wait for the event

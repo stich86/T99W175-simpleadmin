@@ -1,33 +1,84 @@
+/**
+ * SMS messaging management for T99W175 modem.
+ *
+ * Provides Alpine.js component for managing SMS messages including:
+ * - Reading SMS inbox with UCS-2 decoding support
+ * - Sending SMS messages with multipart support
+ * - Deleting individual or all messages
+ * - Storage management (SIM/memory switching)
+ * - Service center number handling
+ *
+ * @module sms
+ * @requires Alpine.js
+ * @requires atcommand-utils.js
+ */
+
+/**
+ * Alpine.js component for SMS messaging functionality.
+ *
+ * Manages SMS inbox retrieval, message parsing, sending new messages,
+ * and deletion operations. Handles UCS-2 encoding/decoding for international
+ * character support and provides multipart message segmentation.
+ *
+ * @returns {Object} Alpine.js component data object
+ */
 function fetchSMS() {
 return {
+  // Loading state for SMS retrieval operations
   isLoading: false,
+  // Sending state for SMS transmission
   isSending: false,
+  // Raw AT command response for debugging
   atCommandResponse: "",
+  // Array of parsed message objects
   messages: [],
+  // Array of sender phone numbers
   senders: [],
+  // Array of formatted date strings
   dates: [],
+  // Array of selected message indices for batch operations
   selectedMessages: [],
+  // Phone number input for sending SMS
   phoneNumber: '',
+  // Message text input for sending SMS
   messageToSend: '',
+  // Array of message indices from modem
   messageIndices: [],
+  // Array of service center numbers
   serviceCenters: [],
+  // Error display flag
   showError: false,
+  // Error message text
   errorMessage: "",
-  expandedMessages: {},  // Track which messages are expanded by index
+  // Track which messages are expanded by index
+  expandedMessages: {},
 
-  // Storage status
+  // Storage status - used message slots
   storageUsed: 0,
+  // Storage status - total available slots
   storageTotal: 0,
-  storageMemoryType: 'SM', // Will be updated from CPMS? response
+  // Storage memory type ('SM' for SIM, 'ME' for memory)
+  storageMemoryType: 'SM',
+  // Flag indicating storage change in progress
   changingStorage: false,
 
-  // Calculate storage percentage
+  /**
+   * Calculates storage usage percentage.
+   *
+   * @returns {number} Storage usage as percentage (0-100)
+   */
   storagePercentage() {
     if (this.storageTotal === 0) return 0;
     return Math.round((this.storageUsed / this.storageTotal) * 100);
   },
 
-  // Get progress bar color class based on usage
+  /**
+   * Determines progress bar color class based on storage usage.
+   *
+   * Returns 'bg-danger' for >=90%, 'bg-warning' for >=70%, else 'bg-success'.
+   *
+   * @returns {string} Bootstrap color class for progress bar
+   */
   storageProgressClass() {
     const percentage = this.storagePercentage();
     if (percentage >= 90) return 'bg-danger';
@@ -35,12 +86,25 @@ return {
     return 'bg-success';
   },
 
-  // Get human-readable memory type name
+  /**
+   * Returns human-readable memory type name.
+   *
+   * @returns {string} 'SIM' or 'Memory'
+   */
   getMemoryTypeName() {
     return this.storageMemoryType === 'SM' ? 'SIM' : 'Memory';
   },
 
-  // Change SMS storage memory
+  /**
+   * Changes SMS storage memory type (SIM or device memory).
+   *
+   * Switches between 'SM' (SIM) and 'ME' (device) storage.
+   * Verifies the change and refreshes the SMS list from new storage.
+   *
+   * @async
+   * @param {string} memoryType - Memory type to switch to ('SM' or 'ME')
+   * @returns {Promise<void>}
+   */
   async changeStorageMemory(memoryType) {
     if (this.changingStorage || memoryType === this.storageMemoryType) {
       return;
@@ -100,7 +164,11 @@ return {
     }
   },
 
-  // Clear existing data
+  /**
+   * Clears all SMS data arrays and UI state.
+   *
+   * Resets messages, senders, dates, selections, and unchecks select-all checkbox.
+   */
   clearData() {
     this.messages = [];
     this.senders = [];
@@ -113,6 +181,14 @@ return {
     }
   },
 
+  /**
+   * Handles SMS operation errors.
+   *
+   * Displays error message and captures optional response data.
+   *
+   * @param {string} message - Error message to display
+   * @param {string} [data=""] - Optional raw response data
+   */
   handleError(message, data = "") {
     this.errorMessage = message;
     this.showError = true;
@@ -122,7 +198,17 @@ return {
     console.error("SMS error:", message);
   },
 
-  // Request SMS messages
+  /**
+   * Retrieves SMS messages from the modem.
+   *
+   * Queries storage status and fetches all SMS messages using AT+CMGL.
+   * Parses response to extract message metadata, sender, date, and content.
+   * Supports skipping CPMS query if already performed.
+   *
+   * @async
+   * @param {boolean} [skipCPMS=false] - Skip CPMS storage query if true
+   * @returns {Promise<void>}
+   */
   async requestSMS(skipCPMS = false) {
     // Prevent multiple simultaneous requests
     if (this.isLoading) {
@@ -198,7 +284,15 @@ return {
     }
   },
 
-  // Parse SMS data
+  /**
+   * Parses raw AT+CMGL response to extract SMS messages.
+   *
+   * Extracts message index, sender (with UCS-2 decoding), timestamp,
+   * and message body. Handles hex-encoded UCS-2 messages and service center numbers.
+   * Supports messages with international characters.
+   *
+   * @param {string} data - Raw AT command response containing SMS data
+   */
   parseSMSData(data) {
     const cmglRegex = /^\s*\+CMGL:\s*(\d+),"[^"]*","([^"]*)"[^"]*,"([^"]*)"/gm;
     const cscaRegex = /^\s*\+CSCA:\s*"([^"]*)"/gm;
@@ -250,13 +344,29 @@ return {
     }
   },
 
-  // Convert hexadecimal to text (assuming UTF-16BE encoding)
+  /**
+   * Converts hexadecimal string to text using UTF-16BE encoding.
+   *
+   * Used for decoding UCS-2 encoded SMS content and sender numbers.
+   *
+   * @param {string} hex - Hexadecimal string to decode
+   * @returns {string} Decoded text string
+   */
   convertHexToText(hex) {
     const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
     return new TextDecoder('utf-16be').decode(bytes);
   },
 
-  // Extract hex payload from SMS body when it is mostly hex data
+  /**
+   * Extracts hexadecimal payload from raw SMS body.
+   *
+   * Determines if the message body is primarily hex-encoded (UCS-2)
+   * by analyzing the hex-to-total character ratio. Returns null if not
+   * predominantly hex data.
+   *
+   * @param {string} raw - Raw message body text
+   * @returns {string|null} Extracted hex string or null if not hex data
+   */
   extractHexPayload(raw) {
     const compact = raw.replace(/\s+/g, '');
     if (!compact) {
@@ -273,7 +383,16 @@ return {
     return hexOnly;
   },
 
-  // Decode hex payload into readable text, picking the most plausible encoding
+  /**
+   * Decodes hex payload into readable text using optimal encoding.
+   *
+   * Tries both UTF-16BE and UTF-8 decoding, scores the results for
+   * readability, and returns the most plausible decoding. Uses UCS-2
+   * zero-even ratio analysis to determine likely encoding.
+   *
+   * @param {string} hex - Hexadecimal string to decode
+   * @returns {string} Decoded text string
+   */
   decodeHexToText(hex) {
     const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
     const utf16Text = new TextDecoder('utf-16be').decode(bytes);
@@ -287,6 +406,16 @@ return {
     return utf8Score >= utf16Score ? utf8Text : utf16Text;
   },
 
+  /**
+   * Scores decoded text for readability and validity.
+   *
+   * Analyzes character distribution to determine if text is valid.
+   * Higher scores indicate more valid text (letters, numbers, punctuation).
+   * Penalizes replacement characters and control characters.
+   *
+   * @param {string} text - Text to score
+   * @returns {number} Score from negative to positive, normalized by length
+   */
   scoreDecodedText(text) {
     if (!text) {
       return 0;
@@ -306,6 +435,15 @@ return {
     return score / text.length;
   },
 
+  /**
+   * Calculates the ratio of zero bytes at even positions.
+   *
+   * UCS-2/UTF-16BE encoded text has zeros at even byte positions for
+   * ASCII characters. High ratio indicates UTF-16BE encoding.
+   *
+   * @param {Uint8Array} bytes - Byte array to analyze
+   * @returns {number} Ratio of zero bytes at even positions (0-1)
+   */
   ucs2ZeroEvenRatio(bytes) {
     if (!bytes || bytes.length < 2) {
       return 0;
@@ -320,7 +458,15 @@ return {
     return zeroEven / pairs;
   },
 
-  // Custom date parsing function
+  /**
+   * Parses custom date format from modem SMS response.
+   *
+   * Parses date string in "YY/MM/DD,HH:MM:SS" format and creates
+   * a Date object. Years 00-99 are assumed to be 2000-2099.
+   *
+   * @param {string} dateStr - Date string from modem
+   * @returns {Date} Parsed Date object
+   */
   parseCustomDate(dateStr) {
     const [datePart, timePart] = dateStr.split(',');
     // Format from modem is YY/MM/DD
@@ -331,7 +477,14 @@ return {
     return new Date(Date.UTC(2000 + year, month - 1, day, hour, minute, second));
   },
 
-  // Custom date formatting function
+  /**
+   * Formats Date object into custom display string.
+   *
+   * Formats date as "DD/MM/YYYY - HH:MM:SS" in UTC timezone.
+   *
+   * @param {Date} date - Date object to format
+   * @returns {string} Formatted date string
+   */
   formatDate(date) {
     const year = date.getUTCFullYear();
     const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -342,7 +495,16 @@ return {
     return `${day}/${month}/${year} - ${hour}:${minute}:${second}`;
   },
 
-  // Delete selected SMS messages
+  /**
+   * Deletes selected SMS messages from modem.
+   *
+   * Deletes messages selected by user. If all messages are selected,
+   * uses deleteAllSMS() for efficiency. Batches delete commands
+   * using AT+CMGD with semicolon separators.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
   async deleteSelectedSMS() {
     if (this.selectedMessages.length === 0) {
       console.warn("No SMS selected.");
@@ -394,8 +556,16 @@ return {
       this.handleError(error.message || "Network error while deleting SMS.");
     }
   },
-  
-  // Delete all SMS messages
+
+  /**
+   * Deletes all SMS messages from current storage.
+   *
+   * Uses AT+CMGD=,4 command to delete all messages efficiently.
+   * Refreshes message list after deletion.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
   async deleteAllSMS() {
     try {
       const result = await ATCommandService.execute('AT+CMGD=,4', {
@@ -416,8 +586,16 @@ return {
       this.handleError(error.message || "Network error while deleting SMS.");
     }
   },
-  
-  // Encode text to UCS2 format
+
+  /**
+   * Encodes text string to UCS-2 hexadecimal format.
+   *
+   * Converts each character to its 4-digit uppercase hex representation.
+   * Used for encoding SMS messages and phone numbers for international support.
+   *
+   * @param {string} input - Text string to encode
+   * @returns {string} UCS-2 hex encoded string
+   */
   encodeUCS2(input) {
     let output = '';
     for (let i = 0; i < input.length; i++) {
@@ -427,21 +605,37 @@ return {
     return output;
   },
 
-  // Normalize phone number by removing spaces and handling prefixes
+  /**
+   * Normalizes phone number for SMS transmission.
+   *
+   * Removes spaces and converts '+' prefix to '00' international format.
+   * Returns the number as-is without adding country code prefixes.
+   *
+   * @param {string} phoneNumber - Phone number to normalize
+   * @returns {string} Normalized phone number
+   */
   normalizePhoneNumber(phoneNumber) {
     // Remove all spaces from the number
     let normalized = phoneNumber.replace(/\s+/g, '');
-    
+
     // If the number starts with '+', replace it with '00'
     if (normalized.startsWith('+')) {
       normalized = '00' + normalized.substring(1);
     }
-    
+
     // Return the normalized number as-is (no automatic prefix addition)
     return normalized;
   },
 
-  // Ensure service center is available, fetch it if not
+  /**
+   * Ensures SMS service center number is available.
+   *
+   * Retrieves service center number using AT+CSCA? if not already cached.
+   * Required before sending SMS messages.
+   *
+   * @async
+   * @returns {Promise<boolean>} True if service center is available
+   */
   async ensureServiceCenter() {
     if (this.serviceCenters && this.serviceCenters.length > 0) {
       return true; // Service center already available
@@ -470,11 +664,20 @@ return {
     } catch (error) {
       console.error("Error retrieving service center:", error);
     }
-    
+
     return false;
   },
 
-  // Send SMS message
+  /**
+   * Sends SMS message with UCS-2 encoding.
+   *
+   * Sends message via send_sms CGI endpoint with multipart support.
+   * Segments messages longer than 70 UCS-2 characters. Normalizes phone
+   * number and encodes both number and message to UCS-2 hex format.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
   async sendSMS() {
     // Prevent double submission
     if (this.isSending) {
@@ -558,7 +761,16 @@ return {
     }
   },
 
-  // Split message into segments of specified length
+  /**
+   * Splits message into segments of specified length.
+   *
+   * Used for multipart SMS messages. Each segment is limited to 70 UCS-2
+   * characters (160 bytes for 7-bit GSM encoding, 140 for 8-bit, 70 for UCS-2).
+   *
+   * @param {string} message - Message text to split
+   * @param {number} length - Maximum length per segment
+   * @returns {string[]} Array of message segments
+   */
   splitMessage(message, length) {
     const segments = [];
     for (let i = 0; i < message.length; i += length) {
@@ -567,7 +779,15 @@ return {
     return segments;
   },
 
-  // Show notification message
+  /**
+   * Displays notification message to user.
+   *
+   * Shows temporary alert notification that auto-dismisses after 3 seconds.
+   * Uses Bootstrap alert classes for styling.
+   *
+   * @param {string} message - Notification message to display
+   * @param {string} [type="info"] - Bootstrap alert type (success, danger, warning, info)
+   */
   showNotification(message, type = "info") {
     const notification = document.getElementById('notification');
     if (notification) {
@@ -580,25 +800,47 @@ return {
     }
   },
 
-  // Initialize
+  /**
+   * Initializes SMS component on page load.
+   *
+   * Clears any existing data and fetches SMS messages from modem.
+   */
   init() {
     this.clearData();
     this.requestSMS();
   },
 
-  // Select all or deselect all
+  /**
+   * Toggles selection state of all messages.
+   *
+   * Selects or deselects all messages based on checkbox state.
+   * Called when "Select All" checkbox is toggled.
+   *
+   * @param {Event} event - Checkbox change event
+   */
   toggleAll(event) {
     this.selectedMessages = event.target.checked
       ? this.messages.map((_, index) => index)
       : [];
   },
 
-  // Toggle message expansion
+  /**
+   * Toggles expanded state of a single message.
+   *
+   * Shows/hides full message content in the UI.
+   *
+   * @param {number} index - Message index in messages array
+   */
   toggleMessage(index) {
     this.expandedMessages[index] = !this.expandedMessages[index];
   },
 
-  // Check if message is expanded
+  /**
+   * Checks if a message is currently expanded.
+   *
+   * @param {number} index - Message index in messages array
+   * @returns {boolean} True if message is expanded
+   */
   isMessageExpanded(index) {
     return this.expandedMessages[index] === true;
   }

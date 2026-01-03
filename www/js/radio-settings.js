@@ -1,14 +1,50 @@
+/**
+ * Radio and cellular settings management for T99W175 modem.
+ *
+ * Provides Alpine.js component for managing radio/cellular settings:
+ * - Band selection and locking (LTE/NSA/SA)
+ * - Cell locking via EARFCN/PCI
+ * - APN configuration
+ * - Network mode selection (3G/4G/5G)
+ * - SIM slot management
+ * - eSIM management integration
+ *
+ * @module radio-settings
+ * @requires Alpine.js
+ * @requires atcommand-utils.js
+ * @requires populate-checkbox.js
+ * @requires generate-freq-box.js
+ */
+
+/**
+ * Alpine.js component for radio/cellular settings functionality.
+ *
+ * Manages cellular radio configuration including band locking, cell locking,
+ * APN settings, network mode preferences, and SIM selection.
+ *
+ * @returns {Object} Alpine.js component data object
+ */
 function cellLocking() {
   return {
+    // Loading state for radio operations
     isLoading: false,
+    // Cell lock modal visibility
     showModalCellLock: false,
+    // Band lock modal visibility
     showModalBand: false,
+    // SIM slot modal visibility
     showModalSim: false,
+    // APN configuration modal visibility
     showModalAPN: false,
+    // Countdown timer for modals
     countdown: 5,
+    // Last error message string
     lastErrorMessage: "",
+    // Active utility tab (apn/cell-lock/band-lock)
     activeUtilityTab: "apn",
+    // Current network mode display
     networkModeCell: "-",
+    // EARFCN/PCI pairs for up to 10 cells
     earfcn1: null,
     pci1: null,
     earfcn2: null,
@@ -29,50 +65,95 @@ function cellLocking() {
     pci9: null,
     earfcn10: null,
     pci10: null,
+    // Subcarrier spacing value
     scs: null,
+    // Current band
     band: null,
+    // Current APN
     apn: "-",
+    // Current APN IP address
     apnIP: "-",
+    // New APN IP to set
     newApnIP: null,
+    // New APN to set
     newApn: null,
+    // Preferred network mode
     prefNetwork: "-",
+    // Preferred network mode value
     prefNetworkValue: null,
+    // 5G NR mode display
     nr5gMode: "Unknown",
+    // 5G mode update in progress
     isUpdatingNr5gMode: false,
+    // Preferred network selection checkboxes
     preferredNetworkSelection: {
       threeG: false,
       fourG: false,
       fiveG: false,
     },
+    // Saving preferred network flag
     isSavingPrefNetwork: false,
+    // Cell lock number
     cellNum: null,
+    // LTE bands string
     lte_bands: "",
+    // NSA bands string
     nsa_bands: "",
+    // SA bands string
     sa_bands: "",
+    // Locked LTE bands string
     locked_lte_bands: "",
+    // Locked NSA bands string
     locked_nsa_bands: "",
+    // Locked SA bands string
     locked_sa_bands: "",
+    // Current network mode (LTE/NSA/SA)
     currentNetworkMode: "LTE",
+    // Updated locked bands array
     updatedLockedBands: [],
+    // Current SIM slot display
     sim: "-",
+    // Pending SIM slot change
     pendingSimSlot: null,
+    // SIM change in progress
     isApplyingSimChange: false,
+    // Cell lock status display
     cellLockStatus: "Unknown",
+    // Bands display string
     bands: "Fetching Bands...",
+    // Number of selected bands
     selectedBandsCount: 0,
+    // Band lock timeout timer
     bandLockTimeout: null,
+    // Previous locked bands for comparison
     previousLockedBands: [],
+    // All available bands by mode
     allAvailableBands: {
       LTE: [],
       NSA: [],
       SA: []
     },
+    // Get bands operation in progress
     isGettingBands: false,
+    // Raw AT command response data
     rawdata: "",
+    // Network mode listener attached flag
     networkModeListenerAttached: false,
+    // Provider bands listener attached flag
     providerBandsListenerAttached: false,
+    // eSIM manager enabled flag
     esimManagerEnabled: false,
+    // eSIM toggle operation in progress
     isTogglingEsim: false,
+
+    /**
+     * Parses APN contexts from AT+CGDCONT response.
+     *
+     * Extracts CID, type, and APN from CGDCONT response lines.
+     *
+     * @param {string} rawData - Raw AT+CGDCONT response
+     * @returns {Array<Object>} Array of APN context objects {cid, type, apn}
+     */
     parseApnContexts(rawData) {
       if (typeof rawData !== "string") {
         return [];
@@ -929,6 +1010,11 @@ function cellLocking() {
         return;
       }
 
+      // Save current SLMODE value to restore it after slot switch
+      const savedSlModeValue = this.prefNetworkValue;
+
+      // Initialize countdown BEFORE showing modal to avoid flash
+      this.countdown = 5;
       this.isApplyingSimChange = true;
       this.showModalSim = true;
 
@@ -946,11 +1032,16 @@ function cellLocking() {
         return;
       }
 
-      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
+
+          // Restore SLMODE to the value it had before slot switch
+          if (savedSlModeValue !== null) {
+            this.sendATcommand(`AT^SLMODE=1,${savedSlModeValue}`);
+          }
+
           this.showModalSim = false;
           this.isApplyingSimChange = false;
           this.getCurrentSettings();
@@ -1072,6 +1163,8 @@ function cellLocking() {
         step.command.startsWith("AT+CGDCONT=1")
       );
 
+      // Initialize countdown BEFORE showing modal to avoid flash
+      this.countdown = 10;
       this.showModalAPN = true;
 
       if (requiresBasebandRestart) {
@@ -1125,8 +1218,6 @@ function cellLocking() {
         }
       }
 
-      this.countdown = requiresBasebandRestart ? 10 : 6;
-
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1175,7 +1266,8 @@ function cellLocking() {
         .map((pair) => `${pair.pci},${pair.earfcn}`)
         .join(",")}`;
 
-      // Mock data
+      // Initialize countdown BEFORE showing modal to avoid flash
+      this.countdown = 5;
       this.showModalCellLock = true;
       const result = await this.sendATcommand(atcmd);
 
@@ -1191,8 +1283,6 @@ function cellLocking() {
         );
         return;
       }
-      // Do a 5 second countdown
-      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1222,7 +1312,8 @@ function cellLocking() {
       // Construct the AT command using the valid pairs
       let atcmd = `AT^NR5G_LOCK=${band},${scs},${earfcn},${pci}`;
 
-      // Mock data
+      // Initialize countdown BEFORE showing modal to avoid flash
+      this.countdown = 5;
       this.showModalCellLock = true;
       const result = await this.sendATcommand(atcmd);
 
@@ -1238,8 +1329,6 @@ function cellLocking() {
         );
         return;
       }
-      // Do a 5 second countdown
-      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1253,6 +1342,9 @@ function cellLocking() {
     async cellLockDisableLTE() {
       // Send the atcmd command to reset the locked bands
       const atcmd = 'AT^LTE_LOCK';
+
+      // Initialize countdown BEFORE showing modal to avoid flash
+      this.countdown = 5;
       this.showModalCellLock = true;
 
       const result = await this.sendATcommand(atcmd);
@@ -1266,7 +1358,6 @@ function cellLocking() {
         return;
       }
 
-      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1280,6 +1371,8 @@ function cellLocking() {
       // Send the atcmd command to reset the locked bands
       const atcmd = 'AT^NR5G_LOCK';
 
+      // Initialize countdown BEFORE showing modal to avoid flash
+      this.countdown = 5;
       this.showModalCellLock = true;
 
       const result = await this.sendATcommand(atcmd);
@@ -1293,13 +1386,12 @@ function cellLocking() {
         return;
       }
 
-      this.countdown = 5;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
           clearInterval(interval);
           this.showModalCellLock = false;
-          this.getCurrentSettings();          
+          this.getCurrentSettings();
         }
       }, 1000);
     },
@@ -1341,6 +1433,8 @@ function cellLocking() {
         return;
       }
 
+      // Initialize countdown BEFORE showing modal to avoid flash
+      this.countdown = 60;
       this.showModalAPN = true;
 
       const response = await this.sendATcommand('AT+CGDCONT?');
@@ -1387,7 +1481,6 @@ function cellLocking() {
       this.newApn = null;
       this.newApnIP = null;
 
-      this.countdown = 60;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {
@@ -1400,7 +1493,9 @@ function cellLocking() {
     async resetBandLocking() {
       console.log("=== resetBandLocking called ===");
       const atcmd = 'AT^BAND_PREF_EXT';
-      
+
+      // Initialize countdown BEFORE showing modal to avoid flash
+      this.countdown = 3;
       this.showModalBand = true;
 
       const result = await this.sendATcommand(atcmd);
@@ -1411,7 +1506,6 @@ function cellLocking() {
         return;
       }
 
-      this.countdown = 3;
       const interval = setInterval(() => {
         this.countdown--;
         if (this.countdown === 0) {

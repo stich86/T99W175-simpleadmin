@@ -1,36 +1,95 @@
+/**
+ * eSIM profile management for T99W175 modem.
+ *
+ * Provides Alpine.js component for managing eSIM profiles via LPA server:
+ * - Profile discovery and listing
+ * - Profile enable/disable operations
+ * - QR code scanning for profile downloads
+ * - Notification handling for pending operations
+ * - Server health and connectivity checks
+ *
+ * Requires euicc-client LPA server running on the modem or local network.
+ *
+ * @module esim
+ * @requires Alpine.js
+ * @requires esim-config.js
+ * @requires jsQR (for QR code scanning)
+ */
+
+/**
+ * Alpine.js component for eSIM management functionality.
+ *
+ * Manages eSIM profile lifecycle including discovery, download,
+ * enable/disable, and deletion operations. Integrates with external
+ * LPA (Local Profile Assistant) server via REST API.
+ *
+ * @returns {Object} Alpine.js component data object
+ */
 function esimManager() {
   return {
+    // Initial loading state
     isLoading: true,
+    // eSIM feature enabled flag
     enabled: false,
+    // LPA server base URL
     baseUrl: "",
+    // Fallback URL for localhost detection
     fallbackBaseUrl: "",
+    // eSIM identifier (EID)
     eid: null,
+    // Array of eSIM profiles
     profiles: [],
+    // Array of pending notifications
     notifications: [],
+    // LPA server health status
     serverHealthy: null,
+    // Internet connectivity status
     internetConnected: null,
+    // Alert message object {type, message}
     alert: { type: "", message: "" },
+    // Profile download loading state
     downloadLoading: false,
+    // Download form data
     downloadForm: {
       smdp: "",
       matching_id: "",
       confirmation_code: "",
       auto_confirm: true,
     },
+    // Nickname edit modal data
     nicknameModal: {
       iccid: "",
       nickname: "",
       currentNickname: "",
     },
+    // LPA server configuration
     serverConfig: {
       imei: "",
       slot: 2,
       refresh: true,
     },
-    isSavingServerConfig: false,    
+    // Server config save in progress
+    isSavingServerConfig: false,
+
+    /**
+     * Initializes eSIM manager component.
+     *
+     * Starts the bootstrap process to load configuration and connect to LPA server.
+     */
     init() {
       this.bootstrap();
     },
+
+    /**
+     * Bootstraps the eSIM manager.
+     *
+     * Loads configuration, checks eSIM feature enablement, validates LPA server
+     * health, and loads initial profiles and notifications. Handles localhost
+     * URL detection for fallback access.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async bootstrap() {
       if (this._bootstrapped) {
         console.debug("[eSIM] Bootstrap already executed, skipping.");
@@ -81,6 +140,16 @@ function esimManager() {
       await this.refreshAll();
       this.isLoading = false;
     },
+
+    /**
+     * Checks internet connectivity by pinging an external server.
+     *
+     * Uses the get_ping CGI endpoint to verify network connectivity.
+     * Sets internetConnected flag based on response.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async checkInternetConnectivity() {
       try {
         console.debug("[eSIM] Checking internet connectivity...");
@@ -88,10 +157,10 @@ function esimManager() {
           cache: 'no-store',
           signal: AbortSignal.timeout(5000) // 5 second timeout
         });
-        
+
         const data = await response.json();
         console.debug("[eSIM] Ping response:", data);
-        
+
         if (data.connected === true || data.status === 'ok') {
           this.internetConnected = true;
           console.debug("[eSIM] Internet connectivity: OK");
@@ -104,10 +173,21 @@ function esimManager() {
         this.internetConnected = false;
       }
     },
+
+    /**
+     * Sets an alert message with optional auto-dismiss.
+     *
+     * Displays alert in UI. Success, info, and warnings auto-dismiss after 5 seconds.
+     * Danger/errors persist until manually cleared.
+     *
+     * @param {string} type - Alert type (success, danger, warning, info)
+     * @param {string} message - Alert message text
+     * @param {boolean} [autoDismiss=true] - Whether to auto-dismiss non-danger alerts
+     */
     setAlert(type, message, autoDismiss = true) {
       this.alert.type = type;
       this.alert.message = message;
-      
+
       // Auto-dismiss after 5s only for success, info, warning (not for danger/error)
       if (autoDismiss && type !== 'danger') {
         if (this._alertTimeout) {
@@ -118,6 +198,12 @@ function esimManager() {
         }, 5000);
       }
     },
+
+    /**
+     * Clears the current alert message.
+     *
+     * Resets alert state and cancels any pending auto-dismiss timeout.
+     */
     clearAlert() {
       this.alert.type = "";
       this.alert.message = "";
@@ -126,11 +212,27 @@ function esimManager() {
         this._alertTimeout = null;
       }
     },
+
+    /**
+     * Returns default headers for API requests.
+     *
+     * @returns {Object} Headers object with Content-Type set to application/json
+     */
     apiHeaders() {
       return {
         "Content-Type": "application/json",
       };
     },
+
+    /**
+     * Computes fallback base URL for localhost detection.
+     *
+     * If the configured URL uses localhost, replaces hostname with current
+     * window location hostname for network access from the browser.
+     *
+     * @param {string} baseUrl - Original base URL from configuration
+     * @returns {string} Fallback URL or empty string
+     */
     computeFallbackBaseUrl(baseUrl) {
       try {
         const url = new URL(baseUrl);
@@ -144,6 +246,19 @@ function esimManager() {
       }
       return "";
     },
+
+    /**
+     * Performs authenticated API request to LPA server.
+     *
+     * Tries primary baseUrl, then fallbackBaseUrl if primary fails.
+     * Automatically switches to fallback on success. Throws on error.
+     *
+     * @async
+     * @param {string} path - API endpoint path
+     * @param {Object} [options={}] - Fetch options (method, body, etc.)
+     * @returns {Promise<Object>} JSON response from API
+     * @throws {Error} If request fails on all base URLs
+     */
     async apiFetch(path, options = {}) {
       if (!this.enabled) {
         throw new Error("eSIM disabled");
@@ -185,6 +300,16 @@ function esimManager() {
 
       throw lastError || new Error("Unable to complete eSIM request.");
     },
+
+    /**
+     * Checks LPA server health and retrieves EID.
+     *
+     * Queries /eid endpoint to verify server is online and eSIM is available.
+     * Sets serverHealthy flag and displays appropriate alert messages.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async checkHealth() {
       try {
         const payload = await this.apiFetch("/eid", { cache: "no-store" });
@@ -214,6 +339,16 @@ function esimManager() {
         console.debug("[eSIM] Server OFFLINE");
       }
     },
+
+    /**
+     * Refreshes all eSIM data from LPA server.
+     *
+     * Reloads profiles, notifications, and connectivity status with delays
+     * between requests to avoid overwhelming the server.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async refreshAll() {
       try {
         await this.loadProfiles();
@@ -225,21 +360,56 @@ function esimManager() {
         this.setAlert("danger", "Error while refreshing eSIM data.", false);
       }
     },
+
+    /**
+     * Promise-based sleep utility.
+     *
+     * @param {number} ms - Milliseconds to sleep
+     * @returns {Promise<void>} Resolves after timeout
+     */
     sleep(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
     },
+
+    /**
+     * Loads eSIM EID from LPA server.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async loadEid() {
       const payload = await this.apiFetch("/eid", { cache: "no-store" });
       this.eid = payload?.data?.eid || null;
     },
+
+    /**
+     * Loads all eSIM profiles from LPA server.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async loadProfiles() {
       const payload = await this.apiFetch("/profiles", { cache: "no-store" });
       this.profiles = payload?.data?.profiles || [];
     },
+
+    /**
+     * Loads pending notifications from LPA server.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async loadNotifications() {
       const payload = await this.apiFetch("/notifications", { cache: "no-store" });
       this.notifications = payload?.data?.notifications || [];
     },
+
+    /**
+     * Returns human-readable profile state label.
+     *
+     * @param {number} value - Profile state value (0=unknown, 1=enabled, 2=disabled)
+     * @returns {string} Human-readable state label
+     */
     profileStateLabel(value) {
       const labels = {
         0: "Unknown/Disabled",
@@ -248,6 +418,13 @@ function esimManager() {
       };
       return labels[value] || "Unknown";
     },
+
+    /**
+     * Returns human-readable profile class label.
+     *
+     * @param {number} value - Profile class value (0=unknown, 1=test, 2=operational)
+     * @returns {string} Human-readable class label
+     */
     profileClassLabel(value) {
       const labels = {
         0: "Unknown",
@@ -256,6 +433,12 @@ function esimManager() {
       };
       return labels[value] || "Unknown";
     },
+
+    /**
+     * Returns sorted array of unique ICCIDs from notifications.
+     *
+     * @returns {string[]} Sorted ICCID strings
+     */
     getUniqueNotificationIccids() {
       const iccids = new Set();
       this.notifications.forEach(notification => {
@@ -265,21 +448,41 @@ function esimManager() {
       });
       return Array.from(iccids).sort();
     },
+
+    /**
+     * Returns Bootstrap badge color class for notification operation.
+     *
+     * Maps operation type to appropriate badge color for UI display.
+     *
+     * @param {string} operationName - Operation name from notification
+     * @returns {string} Bootstrap text-bg-* color class
+     */
     notificationOperationBadge(operationName) {
       const op = (operationName || '').toLowerCase();
-      
+
       if (op.includes('enable')) {
-        return 'text-bg-success'; 
+        return 'text-bg-success';
       } else if (op.includes('disable')) {
-        return 'text-bg-danger'; 
+        return 'text-bg-danger';
       } else if (op.includes('delete')) {
-        return 'text-bg-warning'; 
+        return 'text-bg-warning';
       } else if (op.includes('install') || op.includes('download')) {
-        return 'text-bg-primary'; 
+        return 'text-bg-primary';
       } else {
-        return 'text-bg-secondary'; 
+        return 'text-bg-secondary';
       }
     },
+
+    /**
+     * Parses LPA QR code token string.
+     *
+     * Extracts SMDP server, matching ID, and optional confirmation code
+     * from LPA:1$ formatted QR code.
+     *
+     * @param {string} qrText - QR code text content
+     * @returns {Object} Parsed data {smdp, matching_id, confirmation_code}
+     * @throws {Error} If QR code format is invalid
+     */
     parseLpaQrCode(qrText) {
       const lpaRegex = /^LPA:1\$([^$]+)\$([^$]+)(?:\$([^$]+))?$/;
       const match = qrText.match(lpaRegex);
@@ -294,6 +497,17 @@ function esimManager() {
         confirmation_code: match[3] || ""
       };
     },
+
+    /**
+     * Handles QR code image upload for eSIM download.
+     *
+     * Validates file type, uses jsQR library to decode QR code,
+     * parses LPA token, and auto-fills download form fields.
+     *
+     * @async
+     * @param {Event} event - File input change event
+     * @returns {Promise<void>}
+     */
     async handleQrUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
@@ -342,6 +556,15 @@ function esimManager() {
         event.target.value = '';
       }
     },
+
+    /**
+     * Reads image file and returns ImageData.
+     *
+     * Loads image, draws to canvas, and extracts pixel data for QR processing.
+     *
+     * @param {File} file - Image file to read
+     * @returns {Promise<ImageData>} Image pixel data
+     */
     readImageFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -369,6 +592,17 @@ function esimManager() {
         reader.readAsDataURL(file);
       });
     },
+
+    /**
+     * Enables an eSIM profile by ICCID.
+     *
+     * Sends enable request to LPA server, waits for activation, and refreshes
+     * profile list and notifications. Uses longer sleep for profile activation.
+     *
+     * @async
+     * @param {string} iccid - ICCID of profile to enable
+     * @returns {Promise<void>}
+     */
     async enableProfile(iccid) {
       try {
         await this.apiFetch("/profile/enable", {
@@ -379,12 +613,22 @@ function esimManager() {
         await this.sleep(3000);
         await this.loadProfiles();
         await this.sleep(500);
-        await this.loadNotifications();        
+        await this.loadNotifications();
       } catch (error) {
         console.error(error);
         this.setAlert("danger", `Error enabling profile: ${error.message}`, false);
       }
-    },    
+    },
+
+    /**
+     * Disables an eSIM profile by ICCID.
+     *
+     * Sends disable request to LPA server and refreshes profile list.
+     *
+     * @async
+     * @param {string} iccid - ICCID of profile to disable
+     * @returns {Promise<void>}
+     */
     async disableProfile(iccid) {
       try {
         await this.apiFetch("/profile/disable", {
@@ -401,6 +645,17 @@ function esimManager() {
         this.setAlert("danger", `Error disabling profile: ${error.message}`, false);
       }
     },
+
+    /**
+     * Deletes an eSIM profile by ICCID with user confirmation.
+     *
+     * Shows confirmation dialog, then sends delete request to LPA server.
+     * Refreshes all data after successful deletion.
+     *
+     * @async
+     * @param {string} iccid - ICCID of profile to delete
+     * @returns {Promise<void>}
+     */
     async deleteProfile(iccid) {
       if (!confirm(`Confirm deletion of profile ${iccid}?`)) {
         return;
@@ -417,6 +672,15 @@ function esimManager() {
         this.setAlert("danger", `Error during deletion: ${error.message}`, false);
       }
     },
+
+    /**
+     * Sets nickname for an eSIM profile.
+     *
+     * Updates profile nickname via LPA server and refreshes profile list.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async setNickname() {
       if (!this.nicknameForm.iccid) {
         this.setAlert("warning", "Select an ICCID to set the nickname.");
@@ -438,22 +702,38 @@ function esimManager() {
         this.setAlert("danger", `Error saving nickname: ${error.message}`, false);
       }
     },
+
+    /**
+     * Opens nickname edit modal for a profile.
+     *
+     * Populates modal with current profile data and displays Bootstrap modal.
+     *
+     * @param {Object} profile - Profile object containing iccid and profile_nickname
+     */
     openNicknameModal(profile) {
       this.nicknameModal.iccid = profile.iccid;
       this.nicknameModal.nickname = profile.profile_nickname || "";
       this.nicknameModal.currentNickname = profile.profile_nickname || "";
-      
+
       const modalEl = document.getElementById('nicknameModal');
       const modal = new bootstrap.Modal(modalEl);
       modal.show();
     },
 
+    /**
+     * Saves profile nickname from modal input.
+     *
+     * Sends nickname update to LPA server, closes modal, and refreshes profiles.
+     *
+     * @async
+     * @returns {Promise<void>}
+     */
     async saveNicknameFromModal() {
       if (!this.nicknameModal.iccid) {
         this.setAlert("warning", "Invalid ICCID ");
         return;
       }
-      
+
       try {
         await this.apiFetch("/profile/nickname", {
           method: "POST",
@@ -462,15 +742,15 @@ function esimManager() {
             nickname: this.nicknameModal.nickname || "",
           }),
         });
-        
+
         this.setAlert("success", "Nickname successful updated");
-        
+
         const modalEl = document.getElementById('nicknameModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
         if (modal) modal.hide();
-        
+
         await this.loadProfiles();
-        
+
         // Reset del form
         this.nicknameModal.iccid = "";
         this.nicknameModal.nickname = "";

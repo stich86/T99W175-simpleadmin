@@ -124,14 +124,6 @@
 /* ====================================
    Body & General
    ==================================== */
-body {
-  background: var(--bg-secondary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  transition: background-color var(--animation-duration-slow) ease;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
 /* Smooth scroll behavior */
 html {
   scroll-behavior: smooth;
@@ -1034,6 +1026,22 @@ footer {
   transition: background-color var(--animation-duration-slow) ease;
 }
 
+/* Sticky footer - ensures footer stays at bottom of page */
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  transition: background-color var(--animation-duration-slow) ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+main {
+  flex: 1;
+}
+
 /* ====================================
    Spinners
    ==================================== */
@@ -1787,4 +1795,286 @@ html[data-bs-theme="light"] .btn-close {
   font-weight: 600;
   padding: 0.35em 0.65em;
   border-radius: 6px;
+}
+/* ====================================
+   Modern Loading Modal Styles
+   ==================================== */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+
+.modern-loading-modal {
+  background: var(--bg-primary);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 100%;
+  overflow: hidden;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modern-loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3rem 2rem;
+  gap: 2rem;
+}
+
+.modern-loader {
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+
+.modern-loader-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.modern-loader-circle {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke: var(--bg-tertiary);
+  animation: modernLoaderProgress 2s ease-in-out infinite;
+}
+
+.modern-loader-circle {
+  stroke-dasharray: 126;
+  stroke-dashoffset: 126;
+  animation: modernLoaderDash 1.5s ease-in-out infinite;
+}
+
+@keyframes modernLoaderDash {
+  0% {
+    stroke-dashoffset: 126;
+  }
+  50% {
+    stroke-dashoffset: 31.5;
+    stroke: var(--primary-color);
+  }
+  100% {
+    stroke-dashoffset: 126;
+  }
+}
+
+/* Add gradient stroke animation */
+.modern-loader-circle {
+  stroke: url(#loaderGradient);
+}
+
+.modern-loading-content {
+  text-align: center;
+  animation: contentFadeIn 0.5s ease-out 0.2s both;
+}
+
+@keyframes contentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modern-loading-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.025em;
+}
+
+.modern-loading-text {
+  color: var(--text-secondary);
+  margin: 0 0 1.5rem 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.modern-countdown {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1rem 1.5rem;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.modern-countdown-number {
+  font-size: 2rem;
+  font-weight: 800;
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+  min-width: 40px;
+}
+
+.modern-countdown-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.075em;
+  font-weight: 600;
+}
+
+/* Dark mode adjustments */
+html[data-bs-theme="dark"] .modern-loading-modal {
+  background: var(--bg-primary);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+html[data-bs-theme="dark"] .modern-countdown {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+
+/* x-cloak - hides elements until Alpine is ready */
+[x-cloak] {
+  display: none;
+}
+
+/* Confirm Modal Styles */
+.modern-confirm-modal {
+  background: var(--bg-primary);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 100%;
+  overflow: hidden;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+.modern-confirm-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  gap: 1.5rem;
+  text-align: center;
+  width: 100%;
+  max-width: 100%;
+}
+
+.modern-confirm-title,
+.modern-confirm-text {
+  width: 100%;
+  max-width: 400px;
+}
+
+.modern-confirm-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  animation: scaleIn 0.3s ease-out;
+  flex-shrink: 0;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modern-confirm-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.modern-confirm-text {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.modern-confirm-warning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  color: #856404;
+  font-size: 0.9rem;
+  width: 100%;
+  max-width: 400px;
+  text-align: left;
+}
+
+.modern-confirm-warning span {
+  flex: 1;
+}
+
+html[data-bs-theme="dark"] .modern-confirm-warning {
+  background: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.3);
+  color: #ffc107;
+}
+
+.modern-confirm-warning svg {
+  flex-shrink: 0;
+}
+
+.modern-confirm-buttons {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.modern-confirm-buttons button {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 8px;
 }

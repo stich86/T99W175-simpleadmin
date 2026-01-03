@@ -134,7 +134,7 @@
       }
     });
 
-    // Gestione menu items basata sul ruolo
+    // Role-based menu item visibility
     const menuItems = document.querySelectorAll("[data-role-access]");
     menuItems.forEach((item) => {
       const allowedRoles = item.dataset.roleAccess.split(",");
