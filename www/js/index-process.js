@@ -500,7 +500,9 @@ function processAllInfos() {
               );
 
               // Process antennas for display
-              let processedAntennas = (currentEntry.antennas || []).map((antenna, index) => {
+              let processedAntennas = (currentEntry.antennas || [])
+                .filter(antenna => antenna.value !== null) // Filter out null values (NA) before mapping
+                .map((antenna, index) => {
                 const normalized = roundValue(antenna.value);
                 const label = antenna.label || `Antenna ${index + 1}`;
 
