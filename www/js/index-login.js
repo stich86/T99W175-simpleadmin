@@ -11,6 +11,79 @@
  * @requires LoginConfig
  */
 
+/**
+ * Applies login UI visibility based on enabled state.
+ * This function can be called immediately (before DOMContentLoaded) or after.
+ *
+ * @param {boolean} enabled - Whether login is enabled
+ */
+function applyLoginVisibility(enabled) {
+  // Hide/show username section (desktop)
+  const userSection = document.querySelector(".navbar-user-section");
+  if (userSection) {
+    userSection.style.display = enabled ? "flex" : "none";
+  }
+
+  // Hide/show username avatar
+  const userAvatar = document.getElementById("userAvatar");
+  if (userAvatar) {
+    userAvatar.style.display = enabled ? "block" : "none";
+  }
+
+  // Hide/show username text
+  const userName = document.getElementById("navUserName");
+  if (userName) {
+    userName.style.display = enabled ? "inline" : "none";
+  }
+
+  // Hide/show logout button (desktop)
+  const logoutDesktop = document.getElementById("logoutButtonDesktop");
+  if (logoutDesktop) {
+    logoutDesktop.style.display = enabled ? "block" : "none";
+  }
+
+  // Hide/show logout button (mobile)
+  const logoutMobile = document.getElementById("logoutButtonMobile");
+  if (logoutMobile) {
+    logoutMobile.style.display = enabled ? "block" : "none";
+  }
+
+  // Hide/show logout link (mobile, alternative)
+  const logoutLink = document.getElementById("logoutButton");
+  if (logoutLink) {
+    logoutLink.style.display = enabled ? "block" : "none";
+  }
+
+  // Hide/show Users menu item
+  const usersMenuItem = document.getElementById("usersMenuItem");
+  if (usersMenuItem) {
+    usersMenuItem.style.display = enabled ? "list-item" : "none";
+  }
+
+  // Update divider visibility based on both menu items
+  // Use setTimeout to allow other scripts to run first
+  setTimeout(updateConfigMenuDivider, 0);
+}
+
+// Apply cached config immediately if available (before DOMContentLoaded)
+(function() {
+  try {
+    const cached = sessionStorage.getItem("simpleadmin_login_enabled");
+    if (cached) {
+      const config = JSON.parse(cached);
+      const enabled = config && (config.enabled === 1 || config.enabled === "1" || config.enabled === true);
+      // Apply immediately when DOM is ready (or wait for it)
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => applyLoginVisibility(enabled));
+      } else {
+        applyLoginVisibility(enabled);
+      }
+    }
+  } catch (e) {
+    console.debug("[Login] Error applying cached config", e);
+  }
+})();
+
 document.addEventListener("DOMContentLoaded", () => {
   // Exit if required module is missing
   if (typeof LoginConfig === "undefined") {
@@ -22,51 +95,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const enabled =
       config && (config.enabled === 1 || config.enabled === "1" || config.enabled === true);
 
-    // Hide/show username section (desktop)
-    const userSection = document.querySelector(".navbar-user-section");
-    if (userSection) {
-      userSection.style.display = enabled ? "flex" : "none";
-    }
-
-    // Hide/show username avatar
-    const userAvatar = document.getElementById("userAvatar");
-    if (userAvatar) {
-      userAvatar.style.display = enabled ? "block" : "none";
-    }
-
-    // Hide/show username text
-    const userName = document.getElementById("navUserName");
-    if (userName) {
-      userName.style.display = enabled ? "inline" : "none";
-    }
-
-    // Hide/show logout button (desktop)
-    const logoutDesktop = document.getElementById("logoutButtonDesktop");
-    if (logoutDesktop) {
-      logoutDesktop.style.display = enabled ? "block" : "none";
-    }
-
-    // Hide/show logout button (mobile)
-    const logoutMobile = document.getElementById("logoutButtonMobile");
-    if (logoutMobile) {
-      logoutMobile.style.display = enabled ? "block" : "none";
-    }
-
-    // Hide/show logout link (mobile, alternative)
-    const logoutLink = document.getElementById("logoutButton");
-    if (logoutLink) {
-      logoutLink.style.display = enabled ? "block" : "none";
-    }
-
-    // Hide/show Users menu item
-    const usersMenuItem = document.getElementById("usersMenuItem");
-    if (usersMenuItem) {
-      usersMenuItem.style.display = enabled ? "list-item" : "none";
-    }
-
-    // Update divider visibility based on both menu items
-    // Use setTimeout to allow other scripts to run first
-    setTimeout(updateConfigMenuDivider, 0);
+    // Apply visibility (this will also update sessionStorage via login-config.js)
+    applyLoginVisibility(enabled);
   });
 });
 

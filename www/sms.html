@@ -20,6 +20,37 @@
     })();
   </script>
 
+  <!-- Hide login UI elements immediately if login is disabled (prevents flash) -->
+  <script>
+    (function() {
+      try {
+        const cached = sessionStorage.getItem("simpleadmin_login_enabled");
+        if (cached) {
+          const config = JSON.parse(cached);
+          const enabled = config && (config.enabled === 1 || config.enabled === "1" || config.enabled === true);
+          if (!enabled) {
+            // Add style to hide login elements before body renders
+            const style = document.createElement('style');
+            style.textContent = `
+              .navbar-user-section,
+              #userAvatar,
+              #navUserName,
+              #logoutButtonDesktop,
+              #logoutButtonMobile,
+              #logoutButton,
+              #usersMenuItem {
+                display: none !important;
+              }
+            `;
+            document.head.appendChild(style);
+          }
+        }
+      } catch (e) {
+        // Silently fail if sessionStorage is not available
+      }
+    })();
+  </script>
+
   <!--  Import BootStrap Javascript -->
   <script src="js/auth.js" defer></script>
   <script src="js/bootstrap.bundle.min.js"></script>

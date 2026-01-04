@@ -36,26 +36,54 @@ const LoginConfig = (() => {
         // Handle HTTP errors
         if (!response.ok) {
           console.debug("[Login] Login configuration not available (response not OK)");
-          return { enabled: true }; // Default to enabled for security
+          const defaultConfig = { enabled: true }; // Default to enabled for security
+          sessionStorage.setItem("simpleadmin_login_enabled", JSON.stringify(defaultConfig));
+          return defaultConfig;
         }
         const payload = await response.json();
 
         // Validate response structure
         if (!payload || payload.success !== true) {
           console.debug("[Login] Login configuration response not valid", payload);
-          return { enabled: true }; // Default to enabled for security
+          const defaultConfig = { enabled: true }; // Default to enabled for security
+          sessionStorage.setItem("simpleadmin_login_enabled", JSON.stringify(defaultConfig));
+          return defaultConfig;
         }
-        return payload.data || { enabled: true };
+        const config = payload.data || { enabled: true };
+        // Store in sessionStorage for immediate access on next page load
+        sessionStorage.setItem("simpleadmin_login_enabled", JSON.stringify(config));
+        return config;
       })
       .catch((error) => {
         console.debug("[Login] Error during login configuration retrieve", error);
-        return { enabled: true }; // Default to enabled for security
+        const defaultConfig = { enabled: true }; // Default to enabled for security
+        sessionStorage.setItem("simpleadmin_login_enabled", JSON.stringify(defaultConfig));
+        return defaultConfig;
       });
 
     return cachePromise;
   }
 
+  /**
+   * Gets login configuration from sessionStorage if available.
+   * Returns null if not found in sessionStorage.
+   *
+   * @returns {{enabled: boolean}|null} Configuration object or null
+   */
+  function getCachedConfig() {
+    try {
+      const cached = sessionStorage.getItem("simpleadmin_login_enabled");
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.debug("[Login] Error reading cached config", e);
+    }
+    return null;
+  }
+
   return {
     loadConfig,
+    getCachedConfig,
   };
 })();
