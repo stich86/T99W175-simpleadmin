@@ -113,6 +113,16 @@ ln -s /lib/systemd/system/ttl-override.service /lib/systemd/system/multi-user.ta
 Then copy `ttl-override` script into `/opt/scripts/ttl/` and make it executable with `chmod +x ttl-override`
 For enable reboot schedulare, create `/persit/cron` folder
 
+## Development tools
+### `deploy-www.sh` — Deployment script
+- Purpose: automated deployment of the `www` directory to the modem's web server partition.
+- Prerequisites: the script assumes an SSH key is already installed for the `root` user on the modem (target: `root@192.168.225.1`). Ensure passwordless SSH access is configured before running.
+- Usage: execute from the repository root with optional flags:
+  - `./deploy-www.sh`: standard deployment (preserves existing config settings).
+  - `./deploy-www.sh --nologin`: disables login requirement by setting `SIMPLEADMIN_ENABLE_LOGIN=0` in the config file.
+  - `./deploy-www.sh --noesim`: disables eSIM management by setting `SIMPLEADMIN_ENABLE_ESIM=0` in the config file.
+  - Flags can be combined: `./deploy-www.sh --nologin --noesim`.
+- How it works: the script copies the local `www` directory to `/tmp` on the remote modem via `scp`, then via SSH it stops `qcmap_httpd.service`, removes the old `/WEBSERVER/www` directory, moves the new files to `/WEBSERVER/www`, sets permissions (`chmod -R 755`), optionally modifies `simpleadmin.conf` based on flags, and restarts the web server service.
 
 ## Operational notes
 - All pages load `js/dark-mode.js` so theme preference stays consistent through `localStorage`.
