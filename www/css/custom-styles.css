@@ -1579,6 +1579,17 @@ html[data-bs-theme="dark"] hr {
   border-top-color: var(--border-color);
 }
 
+/* Signal Information Section Headers - Theme Aware */
+.bg-body-secondary {
+  background-color: var(--bs-body-bg, #f8f9fa) !important;
+  color: var(--bs-body-color, #212529) !important;
+}
+
+html[data-bs-theme="dark"] .bg-body-secondary {
+  background-color: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
 /* Loading Modal Dark Mode */
 html[data-bs-theme="dark"] .loading-modal {
   background: var(--bg-primary);

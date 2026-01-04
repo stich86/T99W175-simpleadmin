@@ -448,15 +448,18 @@
                         <td x-text="cellID"></td>
                       </tr>
                       <tr>
-                        <th scope="row">eNB ID <sup>4G/5G</sup></th>
+                        <th scope="row">eNB ID</th>
                         <td x-text="eNBID"></td>
                       </tr>
                       <tr>
-                        <th scope="row">TAC<sup>4G/5G</sup></th>
+                        <th scope="row">TAC</th>
                         <td x-text="tac"></td>
                       </tr>
+                      <tr x-show="rsrqLTE != '-' || rsrpLTE != '-' || rssiLTE != '-' || sinrLTE != '-'">
+                        <td colspan="2" class="fw-bold pt-3 pb-2">4G</td>
+                      </tr>
                       <tr x-show="rsrqLTE != '-'">
-                        <th scope="row">RSRQ<sup>4G</sup></th>
+                        <th scope="row" class="ps-3">RSRQ</th>
                         <td
                           class="gap-4 align-items-center"
                           x-data="{ getProgressBarClass: function() {
@@ -501,7 +504,7 @@
                         </td>
                       </tr>
                       <tr x-show="rsrpLTE != '-'">
-                        <th scope="row">RSRP<sup>4G</sup></th>
+                        <th scope="row" class="ps-3">RSRP</th>
                         <td
                           class="gap-4 align-items-center"
                           x-data="{
@@ -548,7 +551,7 @@
                         </td>
                       </tr>
                       <tr x-show="rssiLTE != '-'">
-                        <th scope="row">RSSI<sup>4G</sup></th>
+                        <th scope="row" class="ps-3">RSSI</th>
                         <td
                           class="gap-4 align-items-center"
                           x-data="{
@@ -594,7 +597,7 @@
                         </td>
                       </tr>
                       <tr x-show="sinrLTE != '-'">
-                        <th scope="row">SINR<sup>4G</sup></th>
+                        <th scope="row" class="ps-3">SINR</th>
                         <td
                           class="gap-4 align-items-center"
                           x-data="{
@@ -640,8 +643,11 @@
                           </span>
                         </td>
                       </tr>
+                      <tr x-show="rsrqNR != '-' || rsrpNR != '-' || rssiNR != '-' || sinrNR != '-'">
+                        <td colspan="2" class="fw-bold pt-3 pb-2">5G</td>
+                      </tr>
                       <tr x-show="rsrqNR != '-'">
-                        <th scope="row">RSRQ<sup>5G</sup></th>
+                        <th scope="row" class="ps-3">RSRQ</th>
                         <td
                           x-data="{ getProgressBarClass: function() {
                           // Remove the percentage sign and convert to integer
@@ -685,7 +691,7 @@
                         </td>
                       </tr>
                       <tr x-show="rsrpNR != '-'">
-                        <th scope="row">RSRP<sup>5G</sup></th>
+                        <th scope="row" class="ps-3">RSRP</th>
                         <td
                           class="gap-4 align-items-center"
                           x-data="{
@@ -732,7 +738,7 @@
                         </td>
                       </tr>
                       <tr x-show="rssiNR != '-'">
-                        <th scope="row">RSSI<sup>5G</sup></th>
+                        <th scope="row" class="ps-3">RSSI</th>
                         <td
                           class="gap-4 align-items-center"
                           x-data="{
@@ -778,7 +784,7 @@
                         </td>
                       </tr>
                       <tr x-show="sinrNR != '-'">
-                        <th scope="row">SINR<sup>5G</sup></th>
+                        <th scope="row" class="ps-3">SINR</th>
                         <td
                           class="gap-4 align-items-center"
                           x-data="{
