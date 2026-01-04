@@ -179,10 +179,10 @@
             <div class="card-body">
               <!-- Storage progress bar -->
               <div class="mb-3" x-show="!isLoading">
-                <label class="form-text d-flex justify-content-between">
+                <div class="form-text d-flex justify-content-between">
                   <span>Storage Usage</span>
                   <span x-text="`${storageUsed}/${storageTotal} messages (${storagePercentage()}%)`"></span>
-                </label>
+                </div>
                 <div class="progress" style="height: 10px;">
                   <div class="progress-bar" :class="storageProgressClass()"
                        role="progressbar"
@@ -261,7 +261,7 @@
             <div class="card-body border-top" x-show="messages.length > 0">
               <div class="form-check">
                 <input id="selectAllCheckbox" class="form-check-input" type="checkbox" @change="toggleAll($event)" />
-                <label class="form-check-label">Select All</label>
+                <label class="form-check-label" for="selectAllCheckbox">Select All</label>
               </div>
             </div>
             <div class="card-footer">

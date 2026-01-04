@@ -625,7 +625,7 @@
                       <div x-show="rebootForm.enabled">
                         <div class="row g-3">
                           <div class="col-md-7">
-                            <label class="form-label d-block mb-2">When?</label>
+                            <div class="form-label d-block mb-2">When?</div>
                             <div class="btn-group mb-3" role="group" aria-label="Auto reboot options">
                               <button type="button" class="btn"
                                       :class="rebootForm.mode === 'interval' ? 'btn-primary' : 'btn-outline-primary'"
@@ -662,7 +662,7 @@
                           </div>
 
                           <div class="col-md-5">
-                            <label class="form-label">&nbsp;</label>
+                            <div class="form-label">&nbsp;</div>
                             <button type="button" class="btn btn-primary w-100" :disabled="rebootSaving" @click="applyRebootImmediately()">
                               <span x-show="!rebootSaving">Apply</span>
                               <span x-show="rebootSaving">

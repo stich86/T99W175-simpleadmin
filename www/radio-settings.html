@@ -306,7 +306,7 @@
                         >
                         <select
                           class="form-select"
-                          id="ipAPN"
+                          id="ipForAPN"
                           x-model="newApnIP"
                           aria-label="ipForAPN"
                           data-requires-admin
@@ -527,6 +527,8 @@
                     <span class="input-group-text" id="basic-addon1">Num Cells</span>
                     <input
                       type="number"
+                      id="numCells"
+                      name="numCells"
                       class="form-control"
                       placeholder="1-10"
                       min="1"
@@ -555,6 +557,8 @@
                   <div class="input-group mb-3">
                     <input
                       type="text"
+                      id="earfcn1"
+                      name="earfcn1"
                       aria-label="EARFCN"
                       placeholder="EARFCN"
                       class="form-control"
@@ -563,6 +567,8 @@
                     />
                     <input
                       type="text"
+                      id="pci1"
+                      name="pci1"
                       aria-label="PCI"
                       placeholder="PCI"
                       class="form-control"
@@ -574,6 +580,8 @@
                   <div class="input-group mb-3">
                     <select
                       class="form-select"
+                      id="scs"
+                      name="scs"
                       x-model="scs"
                       aria-label="SCS"
                       data-requires-admin
@@ -587,6 +595,8 @@
                     </select>
                     <input
                       type="text"
+                      id="band"
+                      name="band"
                       aria-label="band"
                       placeholder="Band"
                       class="form-control"
