@@ -1,22 +1,29 @@
 #!/bin/bash
 
 # Deployment script to copy www directory and update remote server
-# Target: root@192.168.225.1
-# Options:
-#   --nologin  : Set SIMPLEADMIN_ENABLE_LOGIN=0 in config
-#   --noesim   : Set SIMPLEADMIN_ENABLE_ESIM=0 in config
+# Usage: ./deploy-www.sh [HOST] [OPTIONS]
+#   HOST      : Remote host IP/address (default: 192.168.225.1)
+#   Options:
+#     --nologin  : Set SIMPLEADMIN_ENABLE_LOGIN=0 in config
+#     --noesim   : Set SIMPLEADMIN_ENABLE_ESIM=0 in config
 
 set -e  # Exit on error
 
-REMOTE_HOST="192.168.225.1"
 REMOTE_USER="root"
 SOURCE_DIR="./www"
 REMOTE_TMP="/tmp"
 REMOTE_WEB_DIR="/WEBSERVER"
 
 # Parse command line arguments
+# First argument can be the host (if not starting with --)
+REMOTE_HOST="192.168.225.1"  # Default
 DISABLE_LOGIN=0
 DISABLE_ESIM=0
+
+if [ $# -gt 0 ] && [[ ! "$1" =~ ^-- ]]; then
+    REMOTE_HOST="$1"
+    shift  # Remove first argument from $@
+fi
 
 for arg in "$@"; do
     case $arg in
