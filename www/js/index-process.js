@@ -60,6 +60,8 @@ function processAllInfos() {
     ipv6: "0000:0000:0000:0000:0000:0000:0000:0000",
     // Cell ID
     cellID: "Unknown",
+    // Decimal cell ID (long) - stored for direct access
+    decimalCellId: null,
     // eNodeB ID for LTE
     eNBIDLTE: "-",
     // eNodeB ID for NR
@@ -286,17 +288,18 @@ function processAllInfos() {
           console.error("Error fetching basic info:", error);
         }
         
-        this.resetData({
-          simStatus: simStatusText,
-          activeSim: simSlot,
-          signalAssessment: "Unknown",
-          internetConnectionStatus: "Disconnected",
-          networkProvider: "N/A",
-          apn: "Not Available",
-          networkMode: "Not Available",
-          bands: "Not Available",
-          temperature: tempValue
-        });
+      this.resetData({
+        simStatus: simStatusText,
+        activeSim: simSlot,
+        signalAssessment: "Unknown",
+        internetConnectionStatus: "Disconnected",
+        networkProvider: "N/A",
+        apn: "Not Available",
+        networkMode: "Not Available",
+        bands: "Not Available",
+        temperature: tempValue,
+        decimalCellId: null
+      });
         return;
       }
       // SIM is ready, execute full command set
@@ -1082,6 +1085,7 @@ function processAllInfos() {
             return {
               display: cellDisplay,
               eNbId: Number.isNaN(eNbDec) ? "-" : eNbDec,
+              decimalCellId: Number.isNaN(longDec) ? null : longDec,
             };
           };
 
@@ -1131,12 +1135,6 @@ function processAllInfos() {
               this.eNBIDLTE = "-";
             }
 
-            // Track what info is available for fallback strategy
-            let lteCellIdAvailable = false;
-            let lteTacAvailable = false;
-            let nrCellIdAvailable = false;
-            let nrTacAvailable = false;
-
             if (hasLTEStats) {
               const lteCellIdLine = lines.find((line) =>
                 line.includes('lte_cell_id:')
@@ -1149,7 +1147,7 @@ function processAllInfos() {
                 if (cellInfo) {
                   this.cellID = cellInfo.display;
                   this.eNBIDLTE = cellInfo.eNbId;
-                  lteCellIdAvailable = true;
+                  this.decimalCellId = cellInfo.decimalCellId;
                   cellInfoSet = true;
                 }
               }
@@ -1167,7 +1165,6 @@ function processAllInfos() {
                   if (!Number.isNaN(numericValue)) {
                     this.tacLTE = numericValue.toString();
                     this.tac = formatTac(lteTacLine.split(":")[1]);
-                    lteTacAvailable = true;
                   }
                 }
               }
@@ -1251,7 +1248,7 @@ function processAllInfos() {
                 if (cellInfo) {
                   this.cellID = cellInfo.display;
                   this.eNBIDNR = cellInfo.eNbId;
-                  nrCellIdAvailable = true;
+                  this.decimalCellId = cellInfo.decimalCellId;
                   if (!cellInfoSet) {
                     cellInfoSet = true;
                   }
@@ -1270,7 +1267,6 @@ function processAllInfos() {
                     : parseInt(tacValue, 10);
                   if (!Number.isNaN(numericValue)) {
                     this.tacNR = numericValue.toString();
-                    nrTacAvailable = true;
                     if (!cellInfoSet) {
                       this.tac = formatTac(nrTacLine.split(":")[1]);
                     }
@@ -1341,29 +1337,6 @@ function processAllInfos() {
               signalSamples.push(nrSignal);
             }
 
-            // Apply fallback strategy: if any info is missing, use the remaining info for both
-            // This runs after both LTE and NR processing to ensure proper fallback
-            if (!nrCellIdAvailable && lteCellIdAvailable) {
-              if (this.eNBIDLTE && this.eNBIDLTE !== "-" && this.eNBIDLTE !== "Unknown") {
-                this.eNBIDNR = this.eNBIDLTE;
-              }
-            }
-            if (!nrTacAvailable && lteTacAvailable) {
-              if (this.tacLTE && this.tacLTE !== "-" && this.tacLTE !== "Unknown") {
-                this.tacNR = this.tacLTE;
-              }
-            }
-            if (!lteCellIdAvailable && nrCellIdAvailable) {
-              if (this.eNBIDNR && this.eNBIDNR !== "-" && this.eNBIDNR !== "Unknown") {
-                this.eNBIDLTE = this.eNBIDNR;
-              }
-            }
-            if (!lteTacAvailable && nrTacAvailable) {
-              if (this.tacNR && this.tacNR !== "-" && this.tacNR !== "Unknown") {
-                this.tacLTE = this.tacNR;
-              }
-            }
-
             if (signalSamples.length > 0) {
               const totalSignal = signalSamples.reduce(
                 (accumulator, current) => accumulator + current,
@@ -1390,6 +1363,8 @@ function processAllInfos() {
             this.eNBIDLTE = parseInt(longCID.substring(0, longCID.length - 2), 16);
             // Get the short Cell ID (Last 2 characters of the Cell ID)
             const shortCID = longCID.substring(longCID.length - 2);
+            // Store decimal cell ID directly
+            this.decimalCellId = parseInt(longCID, 16);
             // cellID
             this.cellID =
               "Short " +
@@ -1401,7 +1376,7 @@ function processAllInfos() {
               "Long " +
               longCID +
               "(" +
-              parseInt(longCID, 16) +
+              this.decimalCellId +
               ")";
             // TAC
             const localTac = lines
@@ -1411,11 +1386,8 @@ function processAllInfos() {
             const tacNumeric = parseInt(localTac, 16);
             if (!Number.isNaN(tacNumeric)) {
               this.tacLTE = tacNumeric.toString();
-              this.tacNR = tacNumeric.toString(); // Use LTE TAC for NR in 5G NSA mode
               this.tac = tacNumeric + " ("+localTac+")";
             }
-            // In 5G NSA mode, use LTE eNBID for both LTE and NR
-            this.eNBIDNR = this.eNBIDLTE;
             this.cellID =
               "Short " +
               shortCID +
@@ -1426,7 +1398,7 @@ function processAllInfos() {
               "Long " +
               longCID +
               "(" +
-              parseInt(longCID, 16) +
+              this.decimalCellId +
               ")";
             // CSQ
             this.csq = lines
@@ -1947,6 +1919,32 @@ function processAllInfos() {
       }
       document.body.removeChild(textArea);
     }
+  },
+
+  /**
+   * Returns the stored decimal cell ID (long).
+   * @returns {number|null} The decimal cell ID or null if not available
+   */
+  getDecimalCellId() {
+    return this.decimalCellId;
+  },
+
+  /**
+   * Generates the map URL for LTE Italy with MCCMNC and cell ID.
+   * @returns {string|null} The map URL or null if data is not available
+   */
+  getMapUrl() {
+    if (!this.mccmnc || this.mccmnc === "00000" || this.mccmnc === "Unknown") {
+      return null;
+    }
+    const decimalCellId = this.getDecimalCellId();
+    if (decimalCellId === null) {
+      return null;
+    }
+    // Calculate cell ID divided by 256 (floored)
+    const cellIdDivided = Math.floor(decimalCellId / 256);
+    // Build URL: https://lteitaly.it/internal/map.php#bts=MCCMNC.CELLID
+    return `https://lteitaly.it/internal/map.php#bts=${this.mccmnc}.${cellIdDivided}`;
   },
 
   init(skipLocalStorage = false) {
