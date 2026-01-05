@@ -465,6 +465,8 @@ function processAllInfos() {
                     label,
                     display: "N/A",
                     percentage: 0,
+                    color: '#6c757d',
+                    value: null,
                   });
                   return;
                 }
@@ -474,11 +476,30 @@ function processAllInfos() {
                   ? calculator.call(this, normalized)
                   : 0;
 
+                // Calculate color based on metric type
+                let color = '#6c757d'; // default gray
+                const tech = currentEntry.technology || 'LTE';
+                if (key === 'rssi') {
+                  const barResult = this.calculateRSSIBar(normalized, tech);
+                  color = barResult.color;
+                } else if (key === 'rsrp') {
+                  const barResult = this.calculateRSRPBar(normalized, tech);
+                  color = barResult.color;
+                } else if (key === 'rsrq') {
+                  const barResult = this.calculateRSRQBar(normalized, tech);
+                  color = barResult.color;
+                } else if (key === 'sinr') {
+                  const barResult = this.calculateSINRBar(normalized, tech);
+                  color = barResult.color;
+                }
+
                 detail.metrics.push({
                   key,
                   label,
                   display: displayValue,
                   percentage,
+                  color,
+                  value: normalized,
                 });
               };
 
@@ -532,15 +553,20 @@ function processAllInfos() {
                     label,
                     display: "N/A",
                     percentage: 0,
+                    color: '#6c757d',
                     logicalIndex: antenna.logicalIndex,
                     physicalAntenna,
                   };
                 }
 
+                const tech = currentEntry.technology || 'LTE';
+                const barResult = this.calculateRSRPBar(normalized, tech);
+
                 return {
                   label,
                   display: `${normalized} dBm`,
-                  percentage: this.calculateRSRPPercentage(normalized),
+                  percentage: barResult.percentage,
+                  color: barResult.color,
                   logicalIndex: antenna.logicalIndex,
                   physicalAntenna,
                 };
@@ -1646,93 +1672,319 @@ function processAllInfos() {
     return NR_BANDWIDTH_MAP[nr_bw];
   },
 
-  calculateRSSIPercentage(rssi) {
-    const RSSI_MIN = -110;
-    const RSSI_MAX = -30;
+  /**
+   * Signal quality thresholds configuration.
+   * Each metric type has thresholds for different quality levels with colors directly defined.
+   * Thresholds are ordered from best (green_dark) to worst (min).
+   */
+  signalThresholds: {
+    RSSI: {
+      unit: 'dBm',
+      range: { min: -130, max: 0 },
+      thresholds: {
+        green_dark: { value: 0, color: '#006400' },      // Dark green
+        green: { value: -75, color: '#28a745' },         // Green
+        yellow: { value: -85, color: '#ffc107' },         // Yellow
+        orange: { value: -95, color: '#fd7e14' },         // Orange
+        red: { value: -105, color: '#dc3545' },           // Red
+        min: { value: -130, color: '#6c757d' }            // Gray (below minimum)
+      }
+    },
+    RSRP: {
+      unit: 'dBm',
+      range: { min: -140, max: -10 },
+      thresholds: {
+        green_dark: { value: -10, color: '#006400' },     // Dark green
+        green: { value: -85, color: '#28a745' },          // Green
+        yellow: { value: -95, color: '#ffc107' },         // Yellow
+        orange: { value: -105, color: '#fd7e14' },        // Orange
+        red: { value: -115, color: '#dc3545' },           // Red
+        min: { value: -140, color: '#6c757d' }           // Gray (below minimum)
+      }
+    },
+    RSRQ: {
+      unit: 'dB',
+      range: { min: -40, max: 20 },
+      thresholds: {
+        green_dark: { value: 20, color: '#006400' },     // Dark green
+        green: { value: -6, color: '#28a745' },           // Green
+        yellow: { value: -10, color: '#ffc107' },          // Yellow
+        orange: { value: -15, color: '#fd7e14' },         // Orange
+        red: { value: -20, color: '#dc3545' },            // Red
+        min: { value: -40, color: '#6c757d' }             // Gray (below minimum)
+      }
+    },
+    SINR: {
+      unit: 'dB',
+      range: { min: -30, max: 50 }, // Default for LTE, NR uses -50
+      thresholds: {
+        green_dark: { value: 50, color: '#006400' },       // Dark green
+        green: { value: 22, color: '#28a745' },            // Green
+        yellow: { value: 15, color: '#ffc107' },           // Yellow
+        orange: { value: 10, color: '#fd7e14' },          // Orange
+        red: { value: 3, color: '#dc3545' },              // Red
+        min: { value: -30, color: '#6c757d' }            // Gray (below minimum, -50 for NR)
+      }
+    },
+    CPU: {
+      unit: '%',
+      range: { min: 0, max: 100 },
+      thresholds: {
+        green: { value: 50, color: '#28a745' },           // Green (< 50%)
+        yellow: { value: 80, color: '#ffc107' },          // Yellow (50-80%)
+        red: { value: 100, color: '#dc3545' }             // Red (>= 80%)
+      }
+    },
+    Memory: {
+      unit: '%',
+      range: { min: 0, max: 100 },
+      thresholds: {
+        green: { value: 50, color: '#28a745' },           // Green (< 50%)
+        yellow: { value: 80, color: '#ffc107' },          // Yellow (50-80%)
+        red: { value: 100, color: '#dc3545' }             // Red (>= 80%)
+      }
+    }
+  },
 
-    if (isNaN(rssi)) {
+  /**
+   * Determines the color based on value and thresholds.
+   * @param {number} value - The signal value
+   * @param {Object} thresholds - Threshold configuration object with color definitions
+   * @param {boolean} [inverted=false] - If true, lower values are better (for CPU/Memory)
+   * @returns {string} CSS color value (hex color)
+   */
+  getSignalColor(value, thresholds, inverted = false) {
+    // Ensure value is a number
+    const numValue = typeof value === 'number' ? value : parseFloat(value);
+    
+    if (isNaN(numValue) || numValue === null || numValue === undefined) {
+      return thresholds.min?.color || '#6c757d';
+    }
+
+    if (inverted) {
+      // For inverted thresholds (CPU/Memory): lower is better
+      // Check from best (lowest threshold) to worst (highest threshold)
+      if (thresholds.green && numValue < thresholds.green.value) {
+        return thresholds.green.color;
+      } else if (thresholds.yellow && numValue < thresholds.yellow.value) {
+        return thresholds.yellow.color;
+      } else if (thresholds.red && numValue < thresholds.red.value) {
+        return thresholds.red.color;
+      } else {
+        return thresholds.red?.color || '#dc3545'; // >= red threshold
+      }
+    } else {
+      // For normal thresholds (signal metrics): higher is better
+      // Check thresholds from best to worst
+      if (thresholds.green_dark && typeof thresholds.green_dark.value === 'number' && numValue >= thresholds.green_dark.value) {
+        return thresholds.green_dark.color;
+      } else if (thresholds.green && typeof thresholds.green.value === 'number' && numValue >= thresholds.green.value) {
+        return thresholds.green.color;
+      } else if (thresholds.yellow && typeof thresholds.yellow.value === 'number' && numValue >= thresholds.yellow.value) {
+        return thresholds.yellow.color;
+      } else if (thresholds.orange && typeof thresholds.orange.value === 'number' && numValue >= thresholds.orange.value) {
+        return thresholds.orange.color;
+      } else if (thresholds.red && typeof thresholds.red.value === 'number' && numValue >= thresholds.red.value) {
+        return thresholds.red.color;
+      } else if (thresholds.min && typeof thresholds.min.value === 'number' && numValue >= thresholds.min.value) {
+        return thresholds.red?.color || thresholds.min.color; // below red threshold but above min
+      } else {
+        return thresholds.min?.color || '#6c757d'; // below minimum
+      }
+    }
+  },
+
+  /**
+   * Calculates percentage based on value within a range.
+   * @param {number} value - The signal value
+   * @param {number} min - Minimum value in the range
+   * @param {number} max - Maximum value in the range
+   * @returns {number} Percentage (0-100)
+   */
+  calculatePercentage(value, min, max) {
+    if (isNaN(value)) {
       return 0;
     }
 
-    if (rssi <= RSSI_MIN) {
+    // Clamp value to range
+    if (value <= min) {
       return 0;
     }
-
-    let percentage =
-      ((rssi - RSSI_MIN) / (RSSI_MAX - RSSI_MIN)) * 100;
-
-    if (percentage > 100) {
-      percentage = 100;
+    if (value >= max) {
+      return 100;
     }
 
-    if (percentage < 15) {
-      percentage = 15;
+    // Calculate percentage
+    const percentage = ((value - min) / (max - min)) * 100;
+    
+    // Ensure minimum visibility (at least 15% if value is above min)
+    if (percentage > 0 && percentage < 15) {
+      return 15;
     }
 
     return Math.round(percentage);
+  },
+
+  /**
+   * Calculates RSSI bar graph properties (color and percentage).
+   * @param {number} rssi - RSSI value in dBm
+   * @param {string} [technology='LTE'] - Technology type ('LTE' or 'NR')
+   * @returns {Object} Object with color (threshold level name) and percentage properties
+   * @returns {string} returns.color - Threshold level: 'green_dark', 'green', 'yellow', 'orange', 'red', or 'min'
+   * @returns {number} returns.percentage - Percentage value (0-100)
+   */
+  calculateRSSIBar(rssi, technology = 'LTE') {
+    const config = this.signalThresholds.RSSI;
+    
+    // Ensure rssi is a number
+    const numRssi = typeof rssi === 'number' ? rssi : parseFloat(rssi);
+    
+    if (isNaN(numRssi)) {
+      return { color: '#6c757d', percentage: 0 };
+    }
+    
+    const percentage = this.calculatePercentage(numRssi, config.range.min, config.range.max);
+    const color = this.getSignalColor(numRssi, config.thresholds);
+    
+    return { color, percentage };
+  },
+
+  /**
+   * Calculates RSRP bar graph properties (color and percentage).
+   * @param {number} rsrp - RSRP value in dBm
+   * @param {string} [technology='LTE'] - Technology type ('LTE' or 'NR')
+   * @returns {Object} Object with color (threshold level name) and percentage properties
+   * @returns {string} returns.color - Threshold level: 'green_dark', 'green', 'yellow', 'orange', 'red', or 'min'
+   * @returns {number} returns.percentage - Percentage value (0-100)
+   */
+  calculateRSRPBar(rsrp, technology = 'LTE') {
+    const config = this.signalThresholds.RSRP;
+    
+    // Ensure rsrp is a number
+    const numRsrp = typeof rsrp === 'number' ? rsrp : parseFloat(rsrp);
+    
+    if (isNaN(numRsrp)) {
+      return { color: '#6c757d', percentage: 0 };
+    }
+    
+    const percentage = this.calculatePercentage(numRsrp, config.range.min, config.range.max);
+    const color = this.getSignalColor(numRsrp, config.thresholds);
+    
+    return { color, percentage };
+  },
+
+  /**
+   * Calculates RSRQ bar graph properties (color and percentage).
+   * @param {number} rsrq - RSRQ value in dB
+   * @param {string} [technology='LTE'] - Technology type ('LTE' or 'NR')
+   * @returns {Object} Object with color (threshold level name) and percentage properties
+   * @returns {string} returns.color - Threshold level: 'green_dark', 'green', 'yellow', 'orange', 'red', or 'min'
+   * @returns {number} returns.percentage - Percentage value (0-100)
+   */
+  calculateRSRQBar(rsrq, technology = 'LTE') {
+    const config = this.signalThresholds.RSRQ;
+    
+    // Ensure rsrq is a number
+    const numRsrq = typeof rsrq === 'number' ? rsrq : parseFloat(rsrq);
+    
+    if (isNaN(numRsrq)) {
+      return { color: '#6c757d', percentage: 0 };
+    }
+    
+    const percentage = this.calculatePercentage(numRsrq, config.range.min, config.range.max);
+    const color = this.getSignalColor(numRsrq, config.thresholds);
+    
+    return { color, percentage };
+  },
+
+  /**
+   * Calculates SINR bar graph properties (color and percentage).
+   * @param {number} sinr - SINR value in dB
+   * @param {string} [technology='LTE'] - Technology type ('LTE' or 'NR')
+   * @returns {Object} Object with color (CSS hex color) and percentage properties
+   * @returns {string} returns.color - CSS hex color value
+   * @returns {number} returns.percentage - Percentage value (0-100)
+   */
+  calculateSINRBar(sinr, technology = 'LTE') {
+    const config = this.signalThresholds.SINR;
+    
+    // Ensure sinr is a number
+    const numSinr = typeof sinr === 'number' ? sinr : parseFloat(sinr);
+    
+    if (isNaN(numSinr)) {
+      return { color: '#6c757d', percentage: 0 };
+    }
+    
+    // NR has different min threshold
+    const min = technology === 'NR' ? -50 : config.range.min;
+    const range = { min, max: config.range.max };
+    
+    const percentage = this.calculatePercentage(numSinr, range.min, range.max);
+    
+    // Adjust thresholds for NR - update min value
+    const thresholds = technology === 'NR' 
+      ? { 
+          ...config.thresholds, 
+          min: { value: -50, color: config.thresholds.min.color }
+        }
+      : config.thresholds;
+    
+    const color = this.getSignalColor(numSinr, thresholds);
+    
+    return { color, percentage };
+  },
+
+  /**
+   * Calculates CPU usage bar graph properties (color and percentage).
+   * @param {number} cpuUsage - CPU usage percentage (0-100)
+   * @returns {Object} Object with color (CSS hex color) and percentage properties
+   * @returns {string} returns.color - CSS hex color value
+   * @returns {number} returns.percentage - Percentage value (0-100)
+   */
+  calculateCPUBar(cpuUsage) {
+    const config = this.signalThresholds.CPU;
+    
+    const percentage = Math.min(100, Math.max(0, Math.round(cpuUsage)));
+    const color = this.getSignalColor(percentage, config.thresholds, true); // inverted: lower is better
+    
+    return { color, percentage };
+  },
+
+  /**
+   * Calculates Memory usage bar graph properties (color and percentage).
+   * @param {number} memPercent - Memory usage percentage (0-100)
+   * @returns {Object} Object with color (CSS hex color) and percentage properties
+   * @returns {string} returns.color - CSS hex color value
+   * @returns {number} returns.percentage - Percentage value (0-100)
+   */
+  calculateMemoryBar(memPercent) {
+    const config = this.signalThresholds.Memory;
+    
+    const percentage = Math.min(100, Math.max(0, Math.round(memPercent)));
+    const color = this.getSignalColor(percentage, config.thresholds, true); // inverted: lower is better
+    
+    return { color, percentage };
+  },
+
+  // Legacy functions for backward compatibility - now use the new bar functions
+  calculateRSSIPercentage(rssi) {
+    const result = this.calculateRSSIBar(rssi);
+    return result.percentage;
   },
 
   calculateRSRPPercentage(rsrp) {
-    let RSRP_min = -135;
-    let RSRP_max = -65;
-    // If rsrp is null, return 0%
-    if (isNaN(rsrp) || rsrp < -140) {
-      return 0;
-    }
-
-    let percentage = ((rsrp - RSRP_min) / (RSRP_max - RSRP_min)) * 100;
-    
-    if (percentage > 100) {
-      percentage = 100;
-    }
-    // if percentage is less than 15%, make it 15%
-    if (percentage < 15) {
-      percentage = 15;
-    }
-
-    return Math.round(percentage);
+    const result = this.calculateRSRPBar(rsrp);
+    return result.percentage;
   },
 
   calculateRSRQPercentage(rsrq) {
-    let RSRQ_min = -20;
-    let RSRQ_max = -8;
-    // If rsrq is null, return 0%
-    if (isNaN(rsrq) || rsrq < -20) {
-      return 0;
-    }
-
-    let percentage = ((rsrq - RSRQ_min) / (RSRQ_max - RSRQ_min)) * 100;
-
-    if (percentage > 100) {
-      percentage = 100;
-    }
-    // if percentage is less than 15%, make it 15%
-    if (percentage < 15) {
-      percentage = 15;
-    }
-
-    return Math.round(percentage);
+    const result = this.calculateRSRQBar(rsrq);
+    return result.percentage;
   },
 
   calculateSINRPercentage(sinr) {
-    let SINR_min = -10; // Changed from 0
-    let SINR_max = 35;
-    // If sinr is null, return 0%
-    if (isNaN(sinr) || sinr < -10) {
-      return 0;
-    }
-
-    let percentage = ((sinr - SINR_min) / (SINR_max - SINR_min)) * 100;
-
-    if (percentage > 100) {
-      percentage = 100;
-    }
-    // if percentage is less than 15%, make it 15%
-    if (percentage < 15) {
-      percentage = 15;
-    }
-
-    return Math.round(percentage);
+    const result = this.calculateSINRBar(sinr);
+    return result.percentage;
   },
   // Calculate the overall signal assessment
   calculateSignalPercentage(rsrpNRPercentage, sinrNRPercentage) {
@@ -1741,6 +1993,12 @@ function processAllInfos() {
     return Math.round(average);
   },
 
+  /**
+   * Gets progress bar class for signal metrics (backward compatibility).
+   * For new code, use the calculate*Bar functions directly.
+   * @param {number} percentage - Percentage value (0-100)
+   * @returns {string} Bootstrap CSS class
+   */
   getProgressBarClass(percentage) {
     if (percentage >= 60) {
       return "bg-success is-medium";
@@ -1748,6 +2006,46 @@ function processAllInfos() {
       return "bg-warning is-warning is-medium";
     }
     return "bg-danger is-medium";
+  },
+
+  /**
+   * Gets progress bar style string with color for signal metrics.
+   * @param {number} percentage - Percentage value (0-100)
+   * @param {string} type - Signal type: 'RSSI', 'RSRP', 'RSRQ', 'SINR', 'CPU', 'Memory'
+   * @param {string} [technology='LTE'] - Technology type ('LTE' or 'NR') - only for signal types
+   * @returns {string} CSS style string with background-color
+   */
+  getProgressBarStyle(percentage, type, technology = 'LTE') {
+    let color = '#6c757d'; // default gray
+    
+    if (type === 'CPU') {
+      const result = this.calculateCPUBar(percentage);
+      color = result.color;
+    } else if (type === 'Memory') {
+      const result = this.calculateMemoryBar(percentage);
+      color = result.color;
+    } else if (type === 'RSSI') {
+      // For percentage-based, we need to reverse calculate the value
+      // This is a simplified approach - for accurate colors, use calculateRSSIBar with actual value
+      if (percentage >= 60) {
+        color = this.signalThresholds.RSSI.thresholds.green.color;
+      } else if (percentage >= 40) {
+        color = this.signalThresholds.RSSI.thresholds.yellow.color;
+      } else {
+        color = this.signalThresholds.RSSI.thresholds.red.color;
+      }
+    } else {
+      // For other signal types, use similar logic
+      if (percentage >= 60) {
+        color = this.signalThresholds[type]?.thresholds.green?.color || '#28a745';
+      } else if (percentage >= 40) {
+        color = this.signalThresholds[type]?.thresholds.yellow?.color || '#ffc107';
+      } else {
+        color = this.signalThresholds[type]?.thresholds.red?.color || '#dc3545';
+      }
+    }
+    
+    return `background-color: ${color};`;
   },
 
   signalQuality(percentage) {

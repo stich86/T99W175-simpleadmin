@@ -365,25 +365,11 @@
                       </tr>
                       <tr>
                         <th scope="row">CPU Usage</th>
-                        <td
-                          class="gap-4 align-items-center"
-                          x-data="{
-                            getCpuProgressBarClass: function() {
-                              var percentage = this.cpuUsage;
-
-                              if (percentage < 50) {
-                                return 'progress-bar bg-success is-medium';
-                              } else if (percentage < 80) {
-                                return 'progress-bar bg-warning is-warning is-medium';
-                              }
-                              return 'progress-bar bg-danger is-medium';
-                            }
-                          }"
-                        >
+                        <td class="gap-4 align-items-center">
                           <div class="progress w-100" role="progressbar" aria-label="CPU usage" aria-valuemin="0" aria-valuemax="100" style="height: 24px">
                             <div
-                              :class="getCpuProgressBarClass()"
-                              :style="'width: ' + cpuUsage + '%'"
+                              class="progress-bar is-medium"
+                              :style="'width: ' + calculateCPUBar(cpuUsage).percentage + '%; background: ' + calculateCPUBar(cpuUsage).color + ';'"
                             >
                               <span x-text="cpuUsage + '%'"></span>
                             </div>
@@ -392,25 +378,11 @@
                       </tr>
                       <tr>
                         <th scope="row">Memory Usage</th>
-                        <td
-                          class="gap-4 align-items-center"
-                          x-data="{
-                            getMemProgressBarClass: function() {
-                              var percentage = this.memPercent;
-
-                              if (percentage < 50) {
-                                return 'progress-bar bg-success is-medium';
-                              } else if (percentage < 80) {
-                                return 'progress-bar bg-warning is-warning is-medium';
-                              }
-                              return 'progress-bar bg-danger is-medium';
-                            }
-                          }"
-                        >
+                        <td class="gap-4 align-items-center">
                           <div class="progress w-100" role="progressbar" aria-label="Memory usage" aria-valuemin="0" aria-valuemax="100" style="height: 24px">
                             <div
-                              :class="getMemProgressBarClass()"
-                              :style="'width: ' + memPercent + '%'"
+                              class="progress-bar is-medium"
+                              :style="'width: ' + calculateMemoryBar(memPercent).percentage + '%; background: ' + calculateMemoryBar(memPercent).color + ';'"
                             >
                               <span x-text="(memUsed / 1024).toFixed(1) + 'MB / ' + (memTotal / 1024).toFixed(1) + 'MB (' + memPercent + '%)'"></span>
                             </div>
@@ -540,38 +512,7 @@
                       </tr>
                       <tr x-show="(rssiLTE != '-' && rssiLTE) || (rssiNR != '-' && rssiNR)">
                         <th scope="row">RSSI</th>
-                        <td
-                          class="gap-4 align-items-center"
-                          x-data="{
-                          getOverallRSSI: function() {
-                              if (this.rssiLTE && this.rssiLTE != '-') {
-                                  return this.rssiLTE;
-                              } else if (this.rssiNR && this.rssiNR != '-') {
-                                  return this.rssiNR;
-                              }
-                              return '-';
-                          },
-                          getOverallRSSIPercentage: function() {
-                              if (this.rssiLTE && this.rssiLTE != '-' && this.rssiLTEPercentage) {
-                                  return parseInt(this.rssiLTEPercentage) || 0;
-                              } else if (this.rssiNR && this.rssiNR != '-' && this.rssiNRPercentage) {
-                                  return parseInt(this.rssiNRPercentage) || 0;
-                              }
-                              return 0;
-                          },
-                          getProgressBarClass: function() {
-                              var percentage = this.getOverallRSSIPercentage();
-
-                              if (percentage >= 60) {
-                                  return 'progress-bar bg-success is-medium';
-                              } else if (percentage >= 40) {
-                                  return 'progress-bar bg-warning is-warning is-medium';
-                              } else {
-                                  return 'progress-bar bg-danger is-medium';
-                              }
-                          }
-                        }"
-                        >
+                        <td class="gap-4 align-items-center">
                           <div
                             x-show="getOverallRSSI() != '-' && getOverallRSSIPercentage() != 0"
                             class="progress w-100"
@@ -583,8 +524,8 @@
                             style="height: 24px"
                           >
                             <div
-                              :class="getProgressBarClass()"
-                              :style="'width: ' + getOverallRSSIPercentage() + '%'"
+                              class="progress-bar is-medium"
+                              :style="(rssiLTE && rssiLTE != '-') ? ('width: ' + calculateRSSIBar(parseFloat(rssiLTE), 'LTE').percentage + '%; background: ' + calculateRSSIBar(parseFloat(rssiLTE), 'LTE').color + ';') : ('width: ' + calculateRSSIBar(parseFloat(rssiNR), 'NR').percentage + '%; background: ' + calculateRSSIBar(parseFloat(rssiNR), 'NR').color + ';')"
                             >
                               <span
                                 x-text="getOverallRSSI() + ' / ' + getOverallRSSIPercentage() + '%'"
@@ -630,23 +571,7 @@
                       </tr>
                       <tr x-show="rsrpLTE != '-'">
                         <th scope="row" class="ps-3">RSRP</th>
-                        <td
-                          class="gap-4 align-items-center"
-                          x-data="{
-                          getProgressBarClass: function() {
-                              // Remove the percentage sign and convert to integer
-                              var percentage = parseInt(this.rsrpLTEPercentage);
-
-                              if (percentage >= 60) {
-                                  return 'progress-bar bg-success is-medium';
-                              } else if (percentage >= 40) {
-                                  return 'progress-bar bg-warning is-warning is-medium';
-                              } else {
-                                  return 'progress-bar bg-danger is-medium';
-                              }
-                          }
-                        }"
-                        >
+                        <td class="gap-4 align-items-center">
                           <div
                             x-show="rsrpLTE != '-' && rsrpLTEPercentage != '0'"
                             class="progress w-100"
@@ -658,8 +583,8 @@
                             style="height: 24px"
                           >
                             <div
-                              :class="getProgressBarClass()"
-                              :style="'width: ' + rsrpLTEPercentage + '%'"
+                              class="progress-bar is-medium"
+                              :style="'width: ' + calculateRSRPBar(parseFloat(rsrpLTE)).percentage + '%; background: ' + calculateRSRPBar(parseFloat(rsrpLTE)).color + ';'"
                             >
                               <span
                                 x-text="rsrpLTE + ' / ' + rsrpLTEPercentage + '%'"
@@ -680,20 +605,6 @@
                         <td
                           class="gap-4 align-items-center"
                           style="border-bottom: none !important;"
-                          x-data="{
-                          getProgressBarClass: function() {
-                              // Remove the percentage sign and convert to integer
-                              var percentage = parseInt(this.sinrLTEPercentage);
-
-                              if (percentage >= 60) {
-                                  return 'progress-bar bg-success is-medium';
-                              } else if (percentage >= 40) {
-                                  return 'progress-bar bg-warning is-warning is-medium';
-                              } else {
-                                  return 'progress-bar bg-danger is-medium';
-                              }
-                          }
-                        }"
                         >
                           <div
                             x-show="sinrLTE != '-' && sinrLTEPercentage != '0'"
@@ -706,8 +617,8 @@
                             style="height: 24px"
                           >
                             <div
-                              :class="getProgressBarClass()"
-                              :style="'width: ' + sinrLTEPercentage +'%'"
+                              class="progress-bar is-medium"
+                              :style="'width: ' + calculateSINRBar(parseFloat(sinrLTE), 'LTE').percentage + '%; background: ' + calculateSINRBar(parseFloat(sinrLTE), 'LTE').color + ';'"
                             >
                               <span
                                 x-text="sinrLTE + ' / ' + sinrLTEPercentage +'%'"
@@ -728,18 +639,6 @@
                         <td
                           class="gap-4 align-items-center"
                           style="border-bottom: none !important;"
-                          x-data="{ getProgressBarClass: function() {
-                          // Remove the percentage sign and convert to integer
-                          var percentage = parseInt(this.rsrqLTEPercentage);
-
-                          if (percentage >= 60) {
-                              return 'progress-bar bg-success is-medium';
-                          } else if (percentage >= 40) {
-                              return 'progress-bar bg-warning is-warning is-medium';
-                          } else {
-                              return 'progress-bar bg-danger is-medium';
-                          }
-                      } }"
                         >
                           <div
                             x-show="rsrqLTE != '-' && rsrqLTEPercentage != '0'"
@@ -752,8 +651,8 @@
                             style="height: 24px"
                           >
                             <div
-                              :class="getProgressBarClass()"
-                              :style="'width: ' + rsrqLTEPercentage + '%'"
+                              class="progress-bar is-medium"
+                              :style="'width: ' + calculateRSRQBar(parseFloat(rsrqLTE)).percentage + '%; background: ' + calculateRSRQBar(parseFloat(rsrqLTE)).color + ';'"
                             >
                               <span
                                 x-text="rsrqLTE + ' / ' +  rsrqLTEPercentage + '%'"
@@ -799,23 +698,7 @@
                       </tr>
                       <tr x-show="rsrpNR != '-'">
                         <th scope="row" class="ps-3">RSRP</th>
-                        <td
-                          class="gap-4 align-items-center"
-                          x-data="{
-                          getProgressBarClass: function() {
-                              // Remove the percentage sign and convert to integer
-                              var percentage = parseInt(this.rsrpNRPercentage);
-
-                              if (percentage >= 60) {
-                                  return 'progress-bar bg-success is-medium';
-                              } else if (percentage >= 40) {
-                                  return 'progress-bar bg-warning is-warning is-medium';
-                              } else {
-                                  return 'progress-bar bg-danger is-medium';
-                              }
-                          }
-                        }"
-                        >
+                        <td class="gap-4 align-items-center">
                           <div
                             x-show="rsrpNR != '-' && rsrpNRPercentage != '0'"
                             class="progress w-100"
@@ -827,8 +710,8 @@
                             style="height: 24px"
                           >
                             <div
-                              :class="getProgressBarClass()"
-                              :style="'width: ' + rsrpNRPercentage + '%'"
+                              class="progress-bar is-medium"
+                              :style="'width: ' + calculateRSRPBar(parseFloat(rsrpNR), 'NR').percentage + '%; background: ' + calculateRSRPBar(parseFloat(rsrpNR), 'NR').color + ';'"
                             >
                               <span
                                 x-text="rsrpNR + ' / ' + rsrpNRPercentage + '%'"
@@ -849,20 +732,6 @@
                         <td
                           class="gap-4 align-items-center"
                           style="border-bottom: none !important;"
-                          x-data="{
-                          getProgressBarClass: function() {
-                              // Remove the percentage sign and convert to integer
-                              var percentage = parseInt(this.sinrNRPercentage);
-
-                              if (percentage >= 60) {
-                                  return 'progress-bar bg-success is-medium';
-                              } else if (percentage >= 40) {
-                                  return 'progress-bar bg-warning is-warning is-medium';
-                              } else {
-                                  return 'progress-bar bg-danger is-medium';
-                              }
-                          }
-                        }"
                         >
                           <div
                             x-show="sinrNR != '-' && sinrNRPercentage != '0'"
@@ -875,8 +744,8 @@
                             style="height: 24px"
                           >
                             <div
-                              :class="getProgressBarClass()"
-                              :style="'width: ' + sinrNRPercentage +'%'"
+                              class="progress-bar is-medium"
+                              :style="'width: ' + calculateSINRBar(parseFloat(sinrNR), 'NR').percentage + '%; background: ' + calculateSINRBar(parseFloat(sinrNR), 'NR').color + ';'"
                             >
                               <span
                                 x-text="sinrNR + ' / ' + sinrNRPercentage +'%'"
@@ -897,18 +766,6 @@
                         <td
                           class="gap-4 align-items-center"
                           style="border-bottom: none !important;"
-                          x-data="{ getProgressBarClass: function() {
-                          // Remove the percentage sign and convert to integer
-                          var percentage = parseInt(this.rsrqNRPercentage);
-
-                          if (percentage >= 60) {
-                              return 'progress-bar bg-success is-medium';
-                          } else if (percentage >= 40) {
-                              return 'progress-bar bg-warning is-warning is-medium';
-                          } else {
-                              return 'progress-bar bg-danger is-medium';
-                          }
-                      } }"
                         >
                           <div
                             x-show="rsrqNR != '-' && rsrqNRPercentage != '0'"
@@ -921,8 +778,8 @@
                             style="height: 24px"
                           >
                             <div
-                              :class="getProgressBarClass()"
-                              :style="'width: ' + rsrqNRPercentage + '%'"
+                              class="progress-bar is-medium"
+                              :style="'width: ' + calculateRSRQBar(parseFloat(rsrqNR), 'NR').percentage + '%; background: ' + calculateRSRQBar(parseFloat(rsrqNR), 'NR').color + ';'"
                             >
                               <span
                                 x-text="rsrqNR + ' / ' + rsrqNRPercentage + '%'"
@@ -1018,8 +875,7 @@
                               >
                                 <div
                                   class="progress-bar"
-                                  :class="getProgressBarClass(metric.percentage)"
-                                  :style="'width: ' + metric.percentage + '%'"
+                                  :style="'width: ' + metric.percentage + '%; background: ' + (metric.color || '#6c757d') + ';'"
                                 >
                                   <span
                                     x-text="metric.display + ' / ' + metric.percentage + '%'"
@@ -1054,8 +910,7 @@
                                 >
                                   <div
                                     class="progress-bar"
-                                    :class="getProgressBarClass(antenna.percentage)"
-                                    :style="'width: ' + antenna.percentage + '%'"
+                                    :style="'width: ' + antenna.percentage + '%; background: ' + (antenna.color || '#6c757d') + ';'"
                                   ></div>
                                 </div>
                               </template>
@@ -1201,8 +1056,7 @@
                             >
                               <div
                                 class="progress-bar"
-                                :class="getProgressBarClass(metric.percentage)"
-                                :style="'width: ' + metric.percentage + '%'"
+                                :style="'width: ' + metric.percentage + '%; background: ' + (metric.color || '#6c757d') + ';'"
                               >
                                 <span
                                   x-text="metric.display + ' / ' + metric.percentage + '%'"
@@ -1245,8 +1099,7 @@
                               >
                                 <div
                                   class="progress-bar"
-                                  :class="getProgressBarClass(antenna.percentage)"
-                                  :style="'width: ' + antenna.percentage + '%'"
+                                  :style="'width: ' + antenna.percentage + '%; background: ' + (antenna.color || '#6c757d') + ';'"
                                 >
                                   <span x-text="antenna.display + ' / ' + antenna.percentage + '%'"></span>
                                 </div>
