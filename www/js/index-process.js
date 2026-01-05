@@ -944,7 +944,7 @@ function processAllInfos() {
           if (ratValue === "LTE+NR") {
             this.networkModeBadges = [
               { label: "LTE", class: "badge-success-modern" },
-              { label: "5G-NSA", class: "badge-info-modern" }
+              { label: "NR-NSA", class: "badge-info-modern" }
             ];
           } else if (ratValue === "LTE") {
             this.networkModeBadges = [
@@ -952,7 +952,7 @@ function processAllInfos() {
             ];
           } else if (ratValue === "NR5G_SA") {
             this.networkModeBadges = [
-              { label: "5G-SA", class: "badge-purple-dark-modern" }
+              { label: "NR-SA", class: "badge-purple-dark-modern" }
             ];
           } else {
             // For unknown or other values, show as text
@@ -2289,13 +2289,13 @@ function processAllInfos() {
 
   /**
    * Returns the 5G badge text based on RAT field.
-   * @returns {string} "5G-SA" for standalone, "5G-NSA" for non-standalone, or "5G" as fallback
+   * @returns {string} "NR-SA" for standalone, "NR-NSA" for non-standalone, or "5G" as fallback
    */
   get5GBadgeText() {
     if (this.networkMode === "NR5G_SA") {
-      return "5G-SA";
+      return "NR-SA";
     } else if (this.networkMode === "LTE+NR") {
-      return "5G-NSA";
+      return "NR-NSA";
     }
     // Fallback to "5G" if RAT is unknown or other value
     return "5G";
