@@ -294,12 +294,12 @@
                             </svg>
                           </button>
                           <button 
-                            x-show="getMapUrl() !== null"
+                            x-show="getMccMncUrl() !== null"
                             type="button"
                             class="btn btn-link p-0 border-0 text-muted"
                             style="padding: 0 !important; margin-left: 0.25em; vertical-align: baseline; line-height: inherit; display: inline-block;"
-                            @click="window.open(getMapUrl(), '_blank')"
-                            title="Open cell location on LTE Italy map">
+                            @click="window.open(getMccMncUrl(), '_blank')"
+                            title="Open network information on MCC-MNC.org">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em; display: inline-block; vertical-align: middle;">
                               <circle cx="12" cy="12" r="10"></circle>
                               <line x1="2" y1="12" x2="22" y2="12"></line>

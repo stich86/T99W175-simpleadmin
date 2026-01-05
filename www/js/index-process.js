@@ -1947,6 +1947,25 @@ function processAllInfos() {
     return `https://lteitaly.it/internal/map.php#bts=${this.mccmnc}.${cellIdDivided}`;
   },
 
+  /**
+   * Generates the MCC-MNC.org URL for network information.
+   * @returns {string|null} The MCC-MNC.org URL or null if data is not available
+   */
+  getMccMncUrl() {
+    if (!this.mccmnc || this.mccmnc === "00000" || this.mccmnc === "Unknown") {
+      return null;
+    }
+    // mccmnc format: MCC (3 digits) + MNC (2 digits) = 5 digits total
+    // Example: "22288" -> MCC: "222", MNC: "88"
+    if (this.mccmnc.length < 5) {
+      return null;
+    }
+    const mcc = this.mccmnc.substring(0, 3);
+    const mnc = this.mccmnc.substring(3, 5);
+    // Build URL: https://mcc-mnc.org/networks/MCC_MNC
+    return `https://mcc-mnc.org/networks/${mcc}_${mnc}`;
+  },
+
   init(skipLocalStorage = false) {
     // Clear any existing interval before creating a new one
     if (this.intervalId) {
