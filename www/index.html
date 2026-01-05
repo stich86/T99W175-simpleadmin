@@ -357,7 +357,7 @@
                         <td>
                           <span x-text="systemSpeed"></span>
                           <template x-if="systemDuplex !== 'Unknown' && systemDuplex !== ''">
-                            <span class="ms-2">
+                            <span class="ms-2 d-inline-flex align-items-center">
                               <span class="badge" :class="{
                                 'badge-success-modern': systemDuplex === 'Full',
                                 'badge-warning-modern': systemDuplex === 'Half'
@@ -447,18 +447,23 @@
                         <th scope="row">CELL ID</th>
                         <td x-text="cellID"></td>
                       </tr>
-                      <tr>
-                        <th scope="row">eNB ID</th>
-                        <td x-text="eNBID"></td>
-                      </tr>
-                      <tr>
-                        <th scope="row">TAC</th>
-                        <td x-text="tac"></td>
+                      <tr style="border-bottom: none !important;">
+                        <th scope="row" style="border-bottom: none !important;">eNB ID</th>
+                        <td x-text="eNBID" style="border-bottom: none !important;"></td>
                       </tr>
                       <tr x-show="rsrqLTE != '-' || rsrpLTE != '-' || rssiLTE != '-' || sinrLTE != '-'">
-                        <td colspan="2" class="fw-bold pt-3 pb-2">4G</td>
+                        <td colspan="2" class="pt-3 pb-2 border-0">
+                          <div class="d-flex flex-column" style="width: fit-content;">
+                            <span class="badge badge-success-modern" style="font-size: inherit;">
+                              4G
+                            </span>
+                            <span x-show="tacLTE && tacLTE != '-' && tacLTE != ''" class="small text-muted mt-1" style="font-size: 0.85em;">
+                              TAC <span x-text="tacLTE"></span>
+                            </span>
+                          </div>
+                        </td>
                       </tr>
-                      <tr x-show="rsrqLTE != '-'">
+                      <tr x-show="rsrqLTE != '-'" style="border-top: none;">
                         <th scope="row" class="ps-3">RSRQ</th>
                         <td
                           class="gap-4 align-items-center"
@@ -596,10 +601,11 @@
                           </span>
                         </td>
                       </tr>
-                      <tr x-show="sinrLTE != '-'">
-                        <th scope="row" class="ps-3">SINR</th>
+                      <tr x-show="sinrLTE != '-'" style="border-bottom: none !important;">
+                        <th scope="row" class="ps-3" style="border-bottom: none !important;">SINR</th>
                         <td
                           class="gap-4 align-items-center"
+                          style="border-bottom: none !important;"
                           x-data="{
                           getProgressBarClass: function() {
                               // Remove the percentage sign and convert to integer
@@ -644,9 +650,18 @@
                         </td>
                       </tr>
                       <tr x-show="rsrqNR != '-' || rsrpNR != '-' || rssiNR != '-' || sinrNR != '-'">
-                        <td colspan="2" class="fw-bold pt-3 pb-2">5G</td>
+                        <td colspan="2" class="pt-3 pb-2 border-0">
+                          <div class="d-flex flex-column" style="width: fit-content;">
+                            <span class="badge badge-success-modern" style="font-size: inherit;">
+                              5G
+                            </span>
+                            <span x-show="tacNR && tacNR != '-' && tacNR != ''" class="small text-muted mt-1" style="font-size: 0.85em;">
+                              TAC <span x-text="tacNR"></span>
+                            </span>
+                          </div>
+                        </td>
                       </tr>
-                      <tr x-show="rsrqNR != '-'">
+                      <tr x-show="rsrqNR != '-'" style="border-top: none;">
                         <th scope="row" class="ps-3">RSRQ</th>
                         <td
                           x-data="{ getProgressBarClass: function() {
@@ -783,10 +798,11 @@
                           </span>
                         </td>
                       </tr>
-                      <tr x-show="sinrNR != '-'">
-                        <th scope="row" class="ps-3">SINR</th>
+                      <tr x-show="sinrNR != '-'" style="border-bottom: none !important;">
+                        <th scope="row" class="ps-3" style="border-bottom: none !important;">SINR</th>
                         <td
                           class="gap-4 align-items-center"
+                          style="border-bottom: none !important;"
                           x-data="{
                           getProgressBarClass: function() {
                               // Remove the percentage sign and convert to integer
