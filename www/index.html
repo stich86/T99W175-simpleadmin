@@ -803,132 +803,6 @@
           </div>
         </div>
 
-        <div class="row mt-4" style="display: none;">
-          <div class="col-12">
-            <div class="card">
-              <div
-                class="card-header d-flex justify-content-between align-items-center">
-                <span>Advanced Signal Details</span>
-                <button
-                  class="btn btn-sm btn-primary"
-                  type="button"
-                  data-bs-toggle="collapse"
-                  data-bs-target="#advancedSignalCollapse"
-                  aria-expanded="false"
-                  aria-controls="advancedSignalCollapse">
-                  Show details
-                </button>
-              </div>
-              <div id="advancedSignalCollapse" class="collapse">
-                <div class="card-body">
-                  <template x-if="detailedSignals.length === 0">
-                    <p class="mb-0 text-muted">
-                      No advanced details available.
-                    </p>
-                  </template>
-
-                  <template x-for="(entry, index) in detailedSignals" :key="entry.id ?? index">
-                    <div
-                      class="mb-4 pb-3 border-bottom"
-                      :class="{ 'border-0 pb-0 mb-0': index === detailedSignals.length - 1 }"
-                    >
-                      <div
-                        class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-2"
-                      >
-                        <div>
-                          <h5 class="mb-1" x-text="entry.title"></h5>
-                          <p class="mb-0 text-muted">
-                            <span x-text="'Technology: ' + entry.technology"></span>
-                            <span class="ms-3" x-text="'Band: ' + entry.bandDisplay"></span>
-                          </p>
-                        </div>
-                        <div class="text-md-end text-muted small">
-                          <div x-text="'PCI: ' + entry.pciDisplay"></div>
-                          <div x-text="'Channel: ' + entry.channelDisplay"></div>
-                        </div>
-                      </div>
-
-                      <div class="row small text-muted mt-2">
-                        <div class="col-md-6">
-                          <p class="mb-1" x-text="'Bandwidth: ' + entry.bandwidthDisplay"></p>
-                        </div>
-                        <div class="col-md-6 text-md-end" x-show="entry.rxDiversityDisplay">
-                          <p class="mb-1" x-text="'RX Diversity: ' + entry.rxDiversityDisplay"></p>
-                        </div>
-                      </div>
-
-                      <div class="mt-3">
-                        <template x-for="metric in entry.metrics" :key="metric.key">
-                          <div class="mb-3">
-                            <div class="d-flex justify-content-between">
-                              <span class="fw-semibold" x-text="metric.label"></span>
-                              <span x-text="metric.display"></span>
-                            </div>
-                            <template x-if="metric.percentage > 0">
-                              <div
-                                class="progress"
-                                style="height: 24px"
-                                role="progressbar"
-                                aria-valuemin="0"
-                                aria-valuemax="100"
-                                :aria-valuenow="metric.percentage"
-                              >
-                                <div
-                                  class="progress-bar"
-                                  :style="'width: ' + metric.percentage + '%; background: ' + (metric.color || '#6c757d') + ';'"
-                                >
-                                  <span
-                                    x-text="metric.display + ' / ' + metric.percentage + '%'"
-                                  ></span>
-                                </div>
-                              </div>
-                            </template>
-                            <template x-if="metric.percentage === 0">
-                              <span class="fst-italic text-muted">Value not available</span>
-                            </template>
-                          </div>
-                        </template>
-                      </div>
-
-                      <template x-if="entry.antennas && entry.antennas.length">
-                        <div class="mt-3">
-                          <h6 class="fw-semibold">RSRP per Antenna</h6>
-                          <template x-for="antenna in entry.antennas" :key="antenna.label">
-                            <div class="mb-2">
-                              <div class="d-flex justify-content-between small">
-                                <span x-text="antenna.label"></span>
-                                <span x-text="antenna.display"></span>
-                              </div>
-                              <template x-if="antenna.percentage > 0">
-                                <div
-                                  class="progress"
-                                  style="height: 20px"
-                                  role="progressbar"
-                                  aria-valuemin="0"
-                                  aria-valuemax="100"
-                                  :aria-valuenow="antenna.percentage"
-                                >
-                                  <div
-                                    class="progress-bar"
-                                    :style="'width: ' + antenna.percentage + '%; background: ' + (antenna.color || '#6c757d') + ';'"
-                                  ></div>
-                                </div>
-                              </template>
-                              <template x-if="antenna.percentage === 0">
-                                <span class="fst-italic text-muted">Value not available</span>
-                              </template>
-                            </div>
-                          </template>
-                        </div>
-                      </template>
-                    </div>
-                  </template>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- Temperature Modal -->
         <div class="modal fade" id="temperatureModal" tabindex="-1" aria-labelledby="temperatureModalLabel" aria-hidden="true">
           <div class="modal-dialog modal-dialog-centered">
@@ -1066,71 +940,66 @@
                     </div>
 
                     <div class="mt-3">
-                      <template x-for="metric in entry.metrics" :key="metric.key">
-                        <div class="mb-2 d-flex align-items-center gap-2">
-                          <span class="fw-semibold" 
-                            x-text="metric.label"
-                            style="min-width: 50px; text-align: left;"></span>
-                          <template x-if="metric.percentage > 0">
-                            <div
-                              class="progress flex-grow-1"
-                              style="height: 24px"
-                              role="progressbar"
-                              aria-valuemin="0"
-                              aria-valuemax="100"
-                              :aria-valuenow="metric.percentage"
-                            >
-                              <div
-                                class="progress-bar"
-                                :style="'width: ' + metric.percentage + '%; background: ' + (metric.color || '#6c757d') + ';'"
-                              >
-                                <span
-                                  x-text="metric.display + ' / ' + metric.percentage + '%'"
-                                ></span>
-                              </div>
-                            </div>
-                          </template>
-                          <template x-if="metric.percentage === 0">
-                            <span class="fst-italic text-muted flex-grow-1">Value not available</span>
-                          </template>
-                        </div>
-                      </template>
-                    </div>
-
-                    <template x-if="entry.antennas && entry.antennas.length">
-                      <div class="mt-3">
-                        <h6 class="fw-semibold">RSRP vs Antenna</h6>
-                        <template x-for="antenna in entry.antennas" :key="antenna.label">
+                      <template x-for="(metric, metricIndex) in entry.metrics" :key="metric.key">
+                        <div>
                           <div class="mb-2 d-flex align-items-center gap-2">
-                            <template x-if="antenna.physicalAntenna !== undefined">
-                              <span class="fw-semibold" 
-                                x-text="'ANT' + antenna.physicalAntenna"
-                                style="min-width: 50px; text-align: left;"></span>
-                            </template>
-                            <template x-if="antenna.percentage > 0">
+                            <span class="fw-semibold" 
+                              x-text="metric.label"
+                              style="min-width: 80px; text-align: left;"></span>
+                            <template x-if="metric.percentage > 0">
                               <div
                                 class="progress flex-grow-1"
                                 style="height: 24px"
                                 role="progressbar"
                                 aria-valuemin="0"
                                 aria-valuemax="100"
-                                :aria-valuenow="antenna.percentage"
+                                :aria-valuenow="metric.percentage"
                               >
                                 <div
                                   class="progress-bar"
-                                  :style="'width: ' + antenna.percentage + '%; background: ' + (antenna.color || '#6c757d') + ';'"
+                                  :style="'width: ' + metric.percentage + '%; background: ' + (metric.color || '#6c757d') + ';'"
                                 >
-                                  <span x-text="antenna.display + ' / ' + antenna.percentage + '%'"></span>
+                                  <span
+                                    x-text="metric.display + ' / ' + metric.percentage + '%'"
+                                  ></span>
                                 </div>
                               </div>
                             </template>
-                            <template x-if="antenna.percentage === 0">
+                            <template x-if="metric.percentage === 0">
                               <span class="fst-italic text-muted flex-grow-1">Value not available</span>
                             </template>
                           </div>
-                        </template>
-                      </div>
-                    </template>
+                          <!-- Show antennas right after RSRP metric -->
+                          <template x-if="metric.key === 'rsrp' && entry.antennas && entry.antennas.length > 0">
+                            <template x-for="(antenna, antennaIndex) in entry.antennas" :key="'antenna-' + antennaIndex">
+                              <div class="mb-2 d-flex align-items-center gap-2">
+                                <span class="fw-semibold" style="min-width: 80px; text-align: left;" x-html="'RSRP<sub>(ANT' + (typeof antenna.physicalAntenna === 'number' ? antenna.physicalAntenna : antennaIndex) + ')</sub>'"></span>
+                                <template x-if="antenna.percentage > 0">
+                                  <div
+                                    class="progress flex-grow-1"
+                                    style="height: 24px"
+                                    role="progressbar"
+                                    aria-valuemin="0"
+                                    aria-valuemax="100"
+                                    :aria-valuenow="antenna.percentage"
+                                  >
+                                    <div
+                                      class="progress-bar"
+                                      :style="'width: ' + antenna.percentage + '%; background: ' + (antenna.color || '#6c757d') + ';'"
+                                    >
+                                      <span x-text="antenna.display + ' / ' + antenna.percentage + '%'"></span>
+                                    </div>
+                                  </div>
+                                </template>
+                                <template x-if="antenna.percentage === 0">
+                                  <span class="fst-italic text-muted flex-grow-1">Value not available</span>
+                                </template>
+                              </div>
+                            </template>
+                          </template>
+                        </div>
+                      </template>
+                    </div>
                   </div>
                 </template>
               </div>
