@@ -511,8 +511,8 @@
                         </td>
                       </tr>
                       <tr x-show="(rssiLTE != '-' && rssiLTE) || (rssiNR != '-' && rssiNR)">
-                        <th scope="row">RSSI</th>
-                        <td class="gap-4 align-items-center">
+                        <th scope="row" style="border-bottom: 0 !important;">RSSI</th>
+                        <td class="gap-4 align-items-center" style="border-bottom: 0 !important;">
                           <div
                             x-show="getOverallRSSI() != '-' && getOverallRSSIPercentage() != 0"
                             class="progress w-100"
@@ -542,7 +542,7 @@
                         </td>
                       </tr>
                       <tr x-show="rsrqLTE != '-' || rsrpLTE != '-' || sinrLTE != '-'">
-                        <td colspan="2" class="pt-3 pb-2 border-0">
+                        <td colspan="2" class="pb-2 border-0" style="border-top: 0 !important;">
                           <div class="d-flex flex-column gap-2" style="width: fit-content;">
                             <span class="badge badge-success-modern" style="font-size: inherit; display: flex; align-items: center; justify-content: center; width: 2.5em; text-align: center;">
                               LTE
@@ -600,12 +600,9 @@
                           </span>
                         </td>
                       </tr>
-                      <tr x-show="sinrLTE != '-'" style="border-bottom: none !important;">
-                        <th scope="row" class="ps-3" style="border-bottom: none !important;">SINR</th>
-                        <td
-                          class="gap-4 align-items-center"
-                          style="border-bottom: none !important;"
-                        >
+                      <tr x-show="sinrLTE != '-'">
+                        <th scope="row" class="ps-3">SINR</th>
+                        <td class="gap-4 align-items-center">
                           <div
                             x-show="sinrLTE != '-' && sinrLTEPercentage != '0'"
                             class="progress w-100"
@@ -727,12 +724,9 @@
                           </span>
                         </td>
                       </tr>
-                      <tr x-show="sinrNR != '-'" style="border-bottom: none !important;">
-                        <th scope="row" class="ps-3" style="border-bottom: none !important;">SINR</th>
-                        <td
-                          class="gap-4 align-items-center"
-                          style="border-bottom: none !important;"
-                        >
+                      <tr x-show="sinrNR != '-'">
+                        <th scope="row" class="ps-3">SINR</th>
+                        <td class="gap-4 align-items-center">
                           <div
                             x-show="sinrNR != '-' && sinrNRPercentage != '0'"
                             class="progress w-100"
