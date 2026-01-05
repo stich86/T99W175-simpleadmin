@@ -27,7 +27,7 @@ function applyLoginVisibility(enabled) {
   // Hide/show username avatar
   const userAvatar = document.getElementById("userAvatar");
   if (userAvatar) {
-    userAvatar.style.display = enabled ? "block" : "none";
+    userAvatar.style.display = enabled ? "flex" : "none";
   }
 
   // Hide/show username text
