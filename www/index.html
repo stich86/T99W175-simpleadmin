@@ -1020,12 +1020,39 @@
                         <h5 class="mb-1" x-text="entry.title"></h5>
                         <p class="mb-0 text-muted">
                           <span x-text="'Technology: ' + entry.technology"></span>
-                          <span class="ms-3" x-text="'Band: ' + entry.bandDisplay"></span>
                         </p>
                       </div>
                       <div class="text-md-end text-muted small">
-                        <div x-text="'PCI: ' + entry.pciDisplay"></div>
-                        <div x-text="'Channel: ' + entry.channelDisplay"></div>
+                        <div class="d-flex align-items-center justify-content-md-end gap-1">
+                          <span x-text="'PCI: ' + entry.pciDisplay"></span>
+                          <button 
+                            x-show="entry.pciDisplay && entry.pciDisplay !== 'N/A'"
+                            type="button"
+                            class="btn btn-link p-0 border-0 text-muted"
+                            style="padding: 0 !important; vertical-align: baseline; line-height: inherit; display: inline-block;"
+                            @click="copyToClipboard(entry.pciDisplay); const btn = $event.target.closest('button'); btn.classList.add('text-success'); setTimeout(() => btn.classList.remove('text-success'), 1000);"
+                            title="Copy PCI to clipboard">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em; display: inline-block; vertical-align: middle;">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          </button>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-md-end gap-1">
+                          <span x-text="'Channel: ' + entry.channelDisplay"></span>
+                          <button 
+                            x-show="entry.channelDisplay && entry.channelDisplay !== 'N/A'"
+                            type="button"
+                            class="btn btn-link p-0 border-0 text-muted"
+                            style="padding: 0 !important; vertical-align: baseline; line-height: inherit; display: inline-block;"
+                            @click="copyToClipboard(entry.channelDisplay); const btn = $event.target.closest('button'); btn.classList.add('text-success'); setTimeout(() => btn.classList.remove('text-success'), 1000);"
+                            title="Copy Channel to clipboard">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em; display: inline-block; vertical-align: middle;">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1040,14 +1067,13 @@
 
                     <div class="mt-3">
                       <template x-for="metric in entry.metrics" :key="metric.key">
-                        <div class="mb-3">
-                          <div class="d-flex justify-content-between">
-                            <span class="fw-semibold" x-text="metric.label"></span>
-                            <span x-text="metric.display"></span>
-                          </div>
+                        <div class="mb-2 d-flex align-items-center gap-2">
+                          <span class="fw-semibold" 
+                            x-text="metric.label"
+                            style="min-width: 50px; text-align: left;"></span>
                           <template x-if="metric.percentage > 0">
                             <div
-                              class="progress"
+                              class="progress flex-grow-1"
                               style="height: 24px"
                               role="progressbar"
                               aria-valuemin="0"
@@ -1065,7 +1091,7 @@
                             </div>
                           </template>
                           <template x-if="metric.percentage === 0">
-                            <span class="fst-italic text-muted">Value not available</span>
+                            <span class="fst-italic text-muted flex-grow-1">Value not available</span>
                           </template>
                         </div>
                       </template>
@@ -1073,24 +1099,17 @@
 
                     <template x-if="entry.antennas && entry.antennas.length">
                       <div class="mt-3">
-                        <h6 class="fw-semibold">RSRP per Antenna</h6>
+                        <h6 class="fw-semibold">RSRP vs Antenna</h6>
                         <template x-for="antenna in entry.antennas" :key="antenna.label">
-                          <div class="mb-2">
-                            <div class="d-flex justify-content-between small mb-1">
-                              <template x-if="antenna.physicalAntenna !== undefined">
-                                <span class="badge fs-6"
-                                  :class="{
-                                    'bg-primary': antenna.physicalAntenna === 0,
-                                    'bg-success': antenna.physicalAntenna === 1,
-                                    'bg-info': antenna.physicalAntenna === 2,
-                                    'bg-warning': antenna.physicalAntenna === 3
-                                  }"
-                                  x-text="'ANT' + antenna.physicalAntenna"></span>
-                              </template>
-                            </div>
+                          <div class="mb-2 d-flex align-items-center gap-2">
+                            <template x-if="antenna.physicalAntenna !== undefined">
+                              <span class="fw-semibold" 
+                                x-text="'ANT' + antenna.physicalAntenna"
+                                style="min-width: 50px; text-align: left;"></span>
+                            </template>
                             <template x-if="antenna.percentage > 0">
                               <div
-                                class="progress"
+                                class="progress flex-grow-1"
                                 style="height: 24px"
                                 role="progressbar"
                                 aria-valuemin="0"
@@ -1106,7 +1125,7 @@
                               </div>
                             </template>
                             <template x-if="antenna.percentage === 0">
-                              <span class="fst-italic text-muted">Value not available</span>
+                              <span class="fst-italic text-muted flex-grow-1">Value not available</span>
                             </template>
                           </div>
                         </template>

@@ -512,21 +512,21 @@ function processAllInfos() {
               );
               addMetric(
                 "rsrp",
-                currentEntry.technology === "NR" ? "SS_RSRP" : "RSRP",
+                "RSRP",
                 currentEntry.metricsData.rsrp,
                 "dBm",
                 this.calculateRSRPPercentage
               );
               addMetric(
                 "sinr",
-                currentEntry.technology === "NR" ? "SS_SINR" : "SINR",
+                "SINR",
                 currentEntry.metricsData.sinr,
                 "dB",
                 this.calculateSINRPercentage
               );
               addMetric(
                 "rsrq",
-                currentEntry.technology === "NR" ? "SS_RSRQ" : "RSRQ",
+                "RSRQ",
                 currentEntry.metricsData.rsrq,
                 "dB",
                 this.calculateRSRQPercentage
