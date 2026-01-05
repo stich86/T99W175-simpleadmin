@@ -481,7 +481,18 @@
                       </tr>
                       <tr>
                         <th scope="row">Network Mode</th>
-                        <td x-text="networkMode"></td>
+                        <td>
+                          <template x-if="networkModeBadges.length > 0">
+                            <span class="d-inline-flex align-items-center gap-2">
+                              <template x-for="badge in networkModeBadges" :key="badge.label">
+                                <span class="badge" :class="badge.class" x-text="badge.label"></span>
+                              </template>
+                            </span>
+                          </template>
+                          <template x-if="networkModeBadges.length === 0">
+                            <span x-text="networkMode"></span>
+                          </template>
+                        </td>
                       </tr>
                       <tr>
                         <th scope="row">Bands</th>
@@ -527,7 +538,69 @@
                           </button>
                         </td>
                       </tr>
-                      <tr x-show="rsrqLTE != '-' || rsrpLTE != '-' || rssiLTE != '-' || sinrLTE != '-'">
+                      <tr x-show="(rssiLTE != '-' && rssiLTE) || (rssiNR != '-' && rssiNR)">
+                        <th scope="row">RSSI</th>
+                        <td
+                          class="gap-4 align-items-center"
+                          x-data="{
+                          getOverallRSSI: function() {
+                              if (this.rssiLTE && this.rssiLTE != '-') {
+                                  return this.rssiLTE;
+                              } else if (this.rssiNR && this.rssiNR != '-') {
+                                  return this.rssiNR;
+                              }
+                              return '-';
+                          },
+                          getOverallRSSIPercentage: function() {
+                              if (this.rssiLTE && this.rssiLTE != '-' && this.rssiLTEPercentage) {
+                                  return parseInt(this.rssiLTEPercentage) || 0;
+                              } else if (this.rssiNR && this.rssiNR != '-' && this.rssiNRPercentage) {
+                                  return parseInt(this.rssiNRPercentage) || 0;
+                              }
+                              return 0;
+                          },
+                          getProgressBarClass: function() {
+                              var percentage = this.getOverallRSSIPercentage();
+
+                              if (percentage >= 60) {
+                                  return 'progress-bar bg-success is-medium';
+                              } else if (percentage >= 40) {
+                                  return 'progress-bar bg-warning is-warning is-medium';
+                              } else {
+                                  return 'progress-bar bg-danger is-medium';
+                              }
+                          }
+                        }"
+                        >
+                          <div
+                            x-show="getOverallRSSI() != '-' && getOverallRSSIPercentage() != 0"
+                            class="progress w-100"
+                            role="progressbar"
+                            aria-label="RSSI BAR"
+                            :aria-valuenow="getOverallRSSIPercentage()"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                            style="height: 24px"
+                          >
+                            <div
+                              :class="getProgressBarClass()"
+                              :style="'width: ' + getOverallRSSIPercentage() + '%'"
+                            >
+                              <span
+                                x-text="getOverallRSSI() + ' / ' + getOverallRSSIPercentage() + '%'"
+                              ></span>
+                            </div>
+                          </div>
+                          <span
+                            x-show="getOverallRSSIPercentage() == 0 && getOverallRSSI() != '-'"
+                            x-text="getOverallRSSI()"
+                          ></span>
+                          <span x-show="getOverallRSSI() == '-'" class="fst-italic">
+                            None
+                          </span>
+                        </td>
+                      </tr>
+                      <tr x-show="rsrqLTE != '-' || rsrpLTE != '-' || sinrLTE != '-'">
                         <td colspan="2" class="pt-3 pb-2 border-0">
                           <div class="d-flex flex-column gap-2" style="width: fit-content;">
                             <span class="badge badge-success-modern" style="font-size: inherit; display: inline-block; width: 2.5em; text-align: center;">
@@ -745,8 +818,8 @@
                       <tr x-show="rsrqNR != '-' || rsrpNR != '-' || rssiNR != '-' || sinrNR != '-'">
                         <td colspan="2" class="pt-3 pb-2 border-0">
                           <div class="d-flex flex-column gap-2" style="width: fit-content;">
-                            <span class="badge badge-success-modern" style="font-size: inherit; display: inline-block; width: 2.5em; text-align: center;">
-                              5G
+                            <span class="badge badge-success-modern" style="font-size: inherit; display: inline-block; width: fit-content; text-align: center; padding-left: 0.5em; padding-right: 0.5em;">
+                              <span x-text="get5GBadgeText()"></span>
                             </span>
                             <div class="d-flex flex-column gap-1">
                               <span x-show="eNBIDNR && eNBIDNR != '-' && eNBIDNR != 'Unknown' && eNBIDNR != ''" class="small text-muted" style="font-size: 0.85em;">

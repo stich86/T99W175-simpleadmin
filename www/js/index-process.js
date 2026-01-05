@@ -44,6 +44,8 @@ function processAllInfos() {
     apn: "Unknown",
     // Network mode (LTE/NSA/SA)
     networkMode: "Disconnected",
+    // Network mode badges for display
+    networkModeBadges: [],
     // Active bands
     bands: "Unknown Bands",
     // Channel bandwidth
@@ -296,6 +298,7 @@ function processAllInfos() {
         networkProvider: "N/A",
         apn: "Not Available",
         networkMode: "Not Available",
+        networkModeBadges: [],
         bands: "Not Available",
         temperature: tempValue,
         decimalCellId: null
@@ -903,12 +906,32 @@ function processAllInfos() {
             .split(",")[2]
             .replace(/"/g, "");
           // --- Network Mode ---
-          // find this example value from lines "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"TDD\",515,66,7000C4001,475,702000,620640,78,12,-83,-3,16,1,-\r"
+          // Parse RAT field and create badges for display
           const ratLine = lines.find((line) => line.includes('RAT:'));
-          const network_mode = ratLine
+          const ratValue = ratLine
             ? ratLine.split(":")[1].trim()
             : "Unknown";
-          this.networkMode = network_mode;
+          this.networkMode = ratValue;
+          
+          // Parse RAT value and create badges array
+          this.networkModeBadges = [];
+          if (ratValue === "LTE+NR") {
+            this.networkModeBadges = [
+              { label: "LTE", class: "badge-success-modern" },
+              { label: "5G-NSA", class: "badge-success-modern" }
+            ];
+          } else if (ratValue === "LTE") {
+            this.networkModeBadges = [
+              { label: "LTE", class: "badge-success-modern" }
+            ];
+          } else if (ratValue === "NR5G_SA") {
+            this.networkModeBadges = [
+              { label: "5G-SA", class: "badge-success-modern" }
+            ];
+          } else {
+            // For unknown or other values, show as text
+            this.networkModeBadges = [];
+          }
           // --- Bands ---
           // Get all the values with LTE BAND n (for example, LTE BAND 3, LTE BAND 1) and then store them in an array
           const bands = lines.filter((line) =>
@@ -1964,6 +1987,46 @@ function processAllInfos() {
     const mnc = this.mccmnc.substring(3, 5);
     // Build URL: https://mcc-mnc.org/networks/MCC_MNC
     return `https://mcc-mnc.org/networks/${mcc}_${mnc}`;
+  },
+
+  /**
+   * Returns the 5G badge text based on RAT field.
+   * @returns {string} "5G-SA" for standalone, "5G-NSA" for non-standalone, or "5G" as fallback
+   */
+  get5GBadgeText() {
+    if (this.networkMode === "NR5G_SA") {
+      return "5G-SA";
+    } else if (this.networkMode === "LTE+NR") {
+      return "5G-NSA";
+    }
+    // Fallback to "5G" if RAT is unknown or other value
+    return "5G";
+  },
+
+  /**
+   * Returns the overall RSSI value (prefers LTE, falls back to NR).
+   * @returns {string} RSSI value or "-" if not available
+   */
+  getOverallRSSI() {
+    if (this.rssiLTE && this.rssiLTE !== "-") {
+      return this.rssiLTE;
+    } else if (this.rssiNR && this.rssiNR !== "-") {
+      return this.rssiNR;
+    }
+    return "-";
+  },
+
+  /**
+   * Returns the overall RSSI percentage (prefers LTE, falls back to NR).
+   * @returns {number} RSSI percentage or 0 if not available
+   */
+  getOverallRSSIPercentage() {
+    if (this.rssiLTE && this.rssiLTE !== "-" && this.rssiLTEPercentage) {
+      return parseInt(this.rssiLTEPercentage) || 0;
+    } else if (this.rssiNR && this.rssiNR !== "-" && this.rssiNRPercentage) {
+      return parseInt(this.rssiNRPercentage) || 0;
+    }
+    return 0;
   },
 
   init(skipLocalStorage = false) {
