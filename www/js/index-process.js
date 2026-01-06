@@ -1282,8 +1282,9 @@ function processAllInfos() {
               );
 
               const lteSignal = this.calculateSignalPercentage(
+                this.sinrLTEPercentage,
                 this.rsrpLTEPercentage,
-                this.sinrLTEPercentage
+                this.rsrqLTEPercentage
               );
               signalSamples.push(lteSignal);
             }
@@ -1383,8 +1384,9 @@ function processAllInfos() {
               );
 
               const nrSignal = this.calculateSignalPercentage(
+                this.sinrNRPercentage,
                 this.rsrpNRPercentage,
-                this.sinrNRPercentage
+                this.rsrqNRPercentage
               );
               signalSamples.push(nrSignal);
             }
@@ -1497,8 +1499,9 @@ function processAllInfos() {
             // Calculate the Signal Percentage
             const lte_signal_percentage =
               this.calculateSignalPercentage(
+                this.sinrLTEPercentage,
                 this.rsrpLTEPercentage,
-                this.sinrLTEPercentage
+                this.rsrqLTEPercentage
               );
             // RSRP NR
             this.rsrpNR = lines
@@ -1541,8 +1544,9 @@ function processAllInfos() {
             );
             // Calculate the Signal Percentage
             const nr_signal_percentage = this.calculateSignalPercentage(
+              this.sinrNRPercentage,
               this.rsrpNRPercentage,
-              this.sinrNRPercentage
+              this.rsrqNRPercentage
             );
             // Average the LTE and NR Signal Percentages
             this.signalPercentage =
@@ -1749,6 +1753,46 @@ function processAllInfos() {
     }
   },
 
+  signalPercentagePoints: {
+    SINR: [
+      [-10, 0],
+      [0, 35],
+      [5, 55],
+      [10, 75],
+      [15, 90],
+      [20, 97],
+      [30, 100]
+    ],
+    RSRP: [
+      [-120, 0],
+      [-110, 20],
+      [-100, 40],
+      [-95, 55],
+      [-90, 70],
+      [-85, 82],
+      [-80, 92],
+      [-70, 100]
+    ],
+    RSRQ: [
+      [-20, 0],
+      [-15, 20],
+      [-12, 45],
+      [-10, 70],
+      [-9, 80],
+      [-7, 92],
+      [-3, 100]
+    ],
+    RSSI: [
+      [-110, 0],
+      [-100, 15],
+      [-90, 35],
+      [-80, 60],
+      [-70, 85],
+      [-60, 95],
+      [-50, 100]
+    ]
+  },
+
   /**
    * Determines the color based on value and thresholds.
    * @param {number} value - The signal value
@@ -1795,6 +1839,41 @@ function processAllInfos() {
         return thresholds.min?.color || '#6c757d'; // below minimum
       }
     }
+  },
+
+  clampValue(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  },
+
+  lerpValue(value, x1, y1, x2, y2) {
+    return y1 + ((value - x1) / (x2 - x1)) * (y2 - y1);
+  },
+
+  piecewisePercentage(value, points) {
+    const numValue = typeof value === 'number' ? value : parseFloat(value);
+    if (isNaN(numValue) || !Array.isArray(points) || points.length === 0) {
+      return 0;
+    }
+
+    const [x0, y0] = points[0];
+    const [xn, yn] = points[points.length - 1];
+
+    if (numValue <= x0) {
+      return y0;
+    }
+    if (numValue >= xn) {
+      return yn;
+    }
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const [x1, y1] = points[i];
+      const [x2, y2] = points[i + 1];
+      if (numValue >= x1 && numValue <= x2) {
+        return this.lerpValue(numValue, x1, y1, x2, y2);
+      }
+    }
+
+    return yn;
   },
 
   /**
@@ -1846,7 +1925,9 @@ function processAllInfos() {
       return { color: '#6c757d', percentage: 0 };
     }
     
-    const percentage = this.calculatePercentage(numRssi, config.range.min, config.range.max);
+    const percentage = Math.round(
+      this.piecewisePercentage(numRssi, this.signalPercentagePoints.RSSI)
+    );
     const color = this.getSignalColor(numRssi, config.thresholds);
     
     return { color, percentage };
@@ -1870,7 +1951,9 @@ function processAllInfos() {
       return { color: '#6c757d', percentage: 0 };
     }
     
-    const percentage = this.calculatePercentage(numRsrp, config.range.min, config.range.max);
+    const percentage = Math.round(
+      this.piecewisePercentage(numRsrp, this.signalPercentagePoints.RSRP)
+    );
     const color = this.getSignalColor(numRsrp, config.thresholds);
     
     return { color, percentage };
@@ -1894,7 +1977,9 @@ function processAllInfos() {
       return { color: '#6c757d', percentage: 0 };
     }
     
-    const percentage = this.calculatePercentage(numRsrq, config.range.min, config.range.max);
+    const percentage = Math.round(
+      this.piecewisePercentage(numRsrq, this.signalPercentagePoints.RSRQ)
+    );
     const color = this.getSignalColor(numRsrq, config.thresholds);
     
     return { color, percentage };
@@ -1918,11 +2003,9 @@ function processAllInfos() {
       return { color: '#6c757d', percentage: 0 };
     }
     
-    // NR has different min threshold
-    const min = technology === 'NR' ? -50 : config.range.min;
-    const range = { min, max: config.range.max };
-    
-    const percentage = this.calculatePercentage(numSinr, range.min, range.max);
+    const percentage = Math.round(
+      this.piecewisePercentage(numSinr, this.signalPercentagePoints.SINR)
+    );
     
     // Adjust thresholds for NR - update min value
     const thresholds = technology === 'NR' 
@@ -1990,10 +2073,12 @@ function processAllInfos() {
     return result.percentage;
   },
   // Calculate the overall signal assessment
-  calculateSignalPercentage(rsrpNRPercentage, sinrNRPercentage) {
-    // Get the average of the RSRP Percentage and SINR Percentage
-    let average = (rsrpNRPercentage + sinrNRPercentage) / 2;
-    return Math.round(average);
+  calculateSignalPercentage(sinrPercentage, rsrpPercentage, rsrqPercentage) {
+    const sinr = Number.isFinite(sinrPercentage) ? sinrPercentage : 0;
+    const rsrp = Number.isFinite(rsrpPercentage) ? rsrpPercentage : 0;
+    const rsrq = Number.isFinite(rsrqPercentage) ? rsrqPercentage : 0;
+    const score = (0.45 * sinr) + (0.35 * rsrp) + (0.20 * rsrq);
+    return this.clampValue(score, 0, 100);
   },
 
   /**
