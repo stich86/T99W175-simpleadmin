@@ -1614,6 +1614,11 @@ html[data-bs-theme="dark"] .loading-modal strong {
   color: var(--text-primary);
 }
 
+html[data-bs-theme="dark"] .loading-modal ul,
+html[data-bs-theme="dark"] .loading-modal li {
+  color: var(--text-primary);
+}
+
 html[data-bs-theme="dark"] .loading-modal .form-control {
   background-color: var(--bg-secondary);
   border-color: var(--border-color);
