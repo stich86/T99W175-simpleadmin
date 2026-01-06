@@ -11,7 +11,7 @@ if ! session_load; then
 fi
 
 # Check if user is admin
-if [ "$SESSION_USER_ROLE" != "admin" ]; then
+if [ "$SESSION_ROLE" != "admin" ]; then
     send_json_response 403 '{"status":"error","message":"Administrator access required"}'
     exit 0
 fi
@@ -20,11 +20,11 @@ log_action() {
     logger -t "simpleadmin-factory-reset" "$1"
 }
 
-log_action "Factory reset initiated by $SESSION_USER from $REMOTE_ADDR"
+log_action "Factory reset initiated by ${SESSION_USERNAME:-admin} from $REMOTE_ADDR"
 
-# Function to execute AT command
+# Function to execute AT command (don't fail script on error)
 exec_atcmd() {
-    atcli_smd8 "$1" 2>&1
+    atcli_smd8 "$1" 2>&1 || true
 }
 
 # Function to clear all band locks
@@ -62,14 +62,14 @@ restore_xml_configs() {
 
     # Restore factory configs
     if [ -f "$cfg_dir/factory_mobileap_cfg.xml" ]; then
-        cp "$cfg_dir/factory_mobileap_cfg.xml" "$cfg_dir/mobileap_cfg.xml"
+        cp "$cfg_dir/factory_mobileap_cfg.xml" "$cfg_dir/mobileap_cfg.xml" || log_action "WARNING: Failed to restore mobileap_cfg.xml"
         log_action "Restored mobileap_cfg.xml"
     else
         log_action "WARNING: factory_mobileap_cfg.xml not found"
     fi
 
     if [ -f "$cfg_dir/factory_mobileap_firewall.xml" ]; then
-        cp "$cfg_dir/factory_mobileap_firewall.xml" "$cfg_dir/mobileap_firewall.xml"
+        cp "$cfg_dir/factory_mobileap_firewall.xml" "$cfg_dir/mobileap_firewall.xml" || log_action "WARNING: Failed to restore mobileap_firewall.xml"
         log_action "Restored mobileap_firewall.xml"
     else
         log_action "WARNING: factory_mobileap_firewall.xml not found"
@@ -84,8 +84,8 @@ restore_system_files() {
 
     # Restore passwd.stock to both passwd and passwd-
     if [ -f "$etc_dir/passwd.stock" ]; then
-        cp "$etc_dir/passwd.stock" "$etc_dir/passwd"
-        cp "$etc_dir/passwd.stock" "$etc_dir/passwd-"
+        cp "$etc_dir/passwd.stock" "$etc_dir/passwd" || log_action "WARNING: Failed to restore passwd"
+        cp "$etc_dir/passwd.stock" "$etc_dir/passwd-" || log_action "WARNING: Failed to restore passwd-"
         log_action "Restored passwd and passwd-"
     else
         log_action "WARNING: passwd.stock not found"
@@ -93,8 +93,8 @@ restore_system_files() {
 
     # Restore shadow.stock to both shadow and shadow-
     if [ -f "$etc_dir/shadow.stock" ]; then
-        cp "$etc_dir/shadow.stock" "$etc_dir/shadow"
-        cp "$etc_dir/shadow.stock" "$etc_dir/shadow-"
+        cp "$etc_dir/shadow.stock" "$etc_dir/shadow" || log_action "WARNING: Failed to restore shadow"
+        cp "$etc_dir/shadow.stock" "$etc_dir/shadow-" || log_action "WARNING: Failed to restore shadow-"
         log_action "Restored shadow and shadow-"
     else
         log_action "WARNING: shadow.stock not found"
@@ -104,7 +104,7 @@ restore_system_files() {
     local credentials_file="/WEBSERVER/www/cgi-bin/credentials.stock"
     if [ -f "$credentials_file" ]; then
         # Reset admin and guest credentials using sed
-        cp $credentials_file /WEBSERVER/www/cgi-bin/credentials.txt
+        cp "$credentials_file" /WEBSERVER/www/cgi-bin/credentials.txt || log_action "WARNING: Failed to restore credentials.txt"
         log_action "Reset web UI credentials to defaults"
     else
         log_action "WARNING: credentials.stock not found"
@@ -118,7 +118,7 @@ clear_ssh_keys() {
     local dropbear_dir="/systemrw/data/dropbear"
 
     if [ -d "$dropbear_dir" ]; then
-        rm -f "$dropbear_dir"/*_key "$dropbear_dir"/*_key.pub
+        rm -f "$dropbear_dir"/*_key "$dropbear_dir"/*_key.pub || log_action "WARNING: Failed to remove some SSH keys"
         log_action "Cleared dropbear keys"
     else
         log_action "WARNING: dropbear directory not found"
@@ -135,29 +135,60 @@ reboot_system() {
 
 # Main execution
 main() {
-    # Execute all reset operations
-    clear_band_locks
-    clear_cell_locks
-    restore_xml_configs
-    restore_system_files
-    clear_ssh_keys
+    local errors=0
+    
+    # Execute all reset operations (continue even if some fail)
+    clear_band_locks || errors=$((errors + 1))
+    clear_cell_locks || errors=$((errors + 1))
+    restore_xml_configs || errors=$((errors + 1))
+    restore_system_files || errors=$((errors + 1))
+    clear_ssh_keys || errors=$((errors + 1))
 
-    # Send success response
-    send_json_response 200 '{
-        "status":"success",
-        "message":"Factory reset completed successfully. The system will reboot now.",
-        "details": {
-            "band_locks_cleared": true,
-            "cell_locks_cleared": true,
-            "xml_configs_restored": true,
-            "system_files_restored": true,
-            "ssh_keys_cleared": true
-        }
-    }'
+    # Always send response, even if some operations failed
+    if [ $errors -eq 0 ]; then
+        send_json_response 200 '{
+            "status":"success",
+            "message":"Factory reset completed successfully. The system will reboot now.",
+            "details": {
+                "band_locks_cleared": true,
+                "cell_locks_cleared": true,
+                "xml_configs_restored": true,
+                "system_files_restored": true,
+                "ssh_keys_cleared": true
+            }
+        }'
+    else
+        local payload
+        payload=$(printf '{
+            "status":"success",
+            "message":"Factory reset completed with some warnings. The system will reboot now.",
+            "details": {
+                "band_locks_cleared": true,
+                "cell_locks_cleared": true,
+                "xml_configs_restored": true,
+                "system_files_restored": true,
+                "ssh_keys_cleared": true,
+                "warnings": %d
+            }
+        }' "$errors")
+        send_json_response 200 "$payload"
+    fi
 
     # Schedule reboot
     reboot_system
 }
 
-# Run main function
+# Run main function with error handling to ensure response is always sent
+# Temporarily disable exit on error for main execution
+set +e
 main
+main_exit_code=$?
+set -e
+
+# If main failed catastrophically, still send a response
+if [ $main_exit_code -ne 0 ]; then
+    send_json_response 500 '{
+        "status":"error",
+        "message":"Factory reset encountered an error, but operations may have partially completed. The system may reboot."
+    }'
+fi

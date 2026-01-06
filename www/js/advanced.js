@@ -306,7 +306,7 @@ return {
      *
      * Sets showFactoryResetModal flag to display the warning dialog.
      */
-    showFactoryResetModal() {
+    openFactoryResetModal() {
       this.showFactoryResetModal = true;
     },
 
