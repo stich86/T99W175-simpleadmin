@@ -937,9 +937,23 @@
                       <template x-for="(metric, metricIndex) in entry.metrics" :key="metric.key">
                         <div>
                           <div class="mb-2 d-flex align-items-center gap-2">
-                            <span class="fw-semibold" 
-                              x-text="metric.label"
-                              style="min-width: 80px; text-align: left;"></span>
+                            <span class="fw-semibold d-flex align-items-center gap-1" 
+                              style="min-width: 80px; text-align: left;">
+                              <span x-text="metric.label"></span>
+                              <button
+                                x-show="metric.key === 'sinr' && metric.isCA"
+                                type="button"
+                                class="btn btn-link p-0 border-0 text-info"
+                                style="padding: 0 !important; line-height: 1; display: inline-flex; align-items: center;"
+                                @click="showSinrInfoToast()"
+                                title="SINR on CA bands information">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em;">
+                                  <circle cx="12" cy="12" r="10"/>
+                                  <line x1="12" y1="16" x2="12" y2="12"/>
+                                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                                </svg>
+                              </button>
+                            </span>
                             <template x-if="metric.percentage > 0">
                               <div
                                 class="progress flex-grow-1"
@@ -1151,5 +1165,18 @@
       </div>
     </footer>
     </main>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-50 start-50 translate-middle" style="z-index: 9999;">
+      <div id="sinrInfoToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+          <strong class="me-auto">Information</strong>
+          <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body">
+          SINR on CA bands can appear as 0 dB if the CA carriers are not carrying traffic
+        </div>
+      </div>
+    </div>
   </body>
 </html>

@@ -457,7 +457,7 @@ function processAllInfos() {
                 antennas: [],
               };
 
-              const addMetric = (key, label, value, unit, calculator) => {
+              const addMetric = (key, label, value, unit, calculator, isCA = false) => {
                 const normalized = roundValue(value);
                 if (normalized === null) {
                   detail.metrics.push({
@@ -467,6 +467,7 @@ function processAllInfos() {
                     percentage: 0,
                     color: '#6c757d',
                     value: null,
+                    isCA,
                   });
                   return;
                 }
@@ -500,6 +501,7 @@ function processAllInfos() {
                   percentage,
                   color,
                   value: normalized,
+                  isCA,
                 });
               };
 
@@ -522,7 +524,8 @@ function processAllInfos() {
                 "SINR",
                 currentEntry.metricsData.sinr,
                 "dB",
-                this.calculateSINRPercentage
+                this.calculateSINRPercentage,
+                currentEntry.role === "secondary"
               );
               addMetric(
                 "rsrq",
@@ -2386,6 +2389,17 @@ function processAllInfos() {
       this.lastUpdate = new Date().toLocaleString();
       console.log("Refreshed");
     }, this.refreshRate * 1000);
+  },
+
+  /**
+   * Shows a toast notification with information about SINR on CA bands.
+   */
+  showSinrInfoToast() {
+    const toastElement = document.getElementById('sinrInfoToast');
+    if (toastElement) {
+      const toast = new bootstrap.Toast(toastElement);
+      toast.show();
+    }
   },
 };
 }
