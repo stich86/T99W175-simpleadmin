@@ -68,6 +68,8 @@ return {
     showFactoryResetModal: false,
     // Factory reset in progress state
     isFactoryResetting: false,
+    // Factory reset countdown timer value
+    resetCountdown: 60,
 
     /**
      * Closes the reboot confirmation modal.
@@ -329,6 +331,7 @@ return {
     performFactoryReset() {
       this.showFactoryResetModal = false;
       this.isFactoryResetting = true;
+      this.resetCountdown = 60;
 
       fetch('/cgi-bin/factory_reset', {
         method: 'POST',
@@ -340,8 +343,15 @@ return {
       .then(data => {
         if (data.status === 'success') {
           console.log('Factory reset initiated:', data.message);
-          // The device will reboot automatically
-          // The progress modal will stay visible until reboot happens
+          // Start countdown timer
+          const countdownInterval = setInterval(() => {
+            this.resetCountdown--;
+            if (this.resetCountdown <= 0) {
+              clearInterval(countdownInterval);
+              // Redirect to stock IP
+              window.location.href = 'http://192.168.225.1';
+            }
+          }, 1000);
         } else {
           console.error('Factory reset failed:', data.message);
           this.isFactoryResetting = false;
@@ -351,7 +361,7 @@ return {
       .catch(error => {
         console.error('Error performing factory reset:', error);
         this.isFactoryResetting = false;
-        alert('Error performing factory reset: ' + error.message);
+        alert('Error performing factory reset: ' + error);
       });
     },
 
