@@ -874,6 +874,7 @@ function processAllInfos() {
             .find((line) => line.includes("+CPIN:"))
             .split(":")[1]
             .replace(/"/g, "")
+            .trim();
             
           // console.log(sim_status)
           if (sim_status == "READY") {
@@ -2229,6 +2230,26 @@ function processAllInfos() {
       return 'icon-container icon-cloud connection-warning';
     } else {
       return 'icon-container icon-cloud connection-disconnected';
+    }
+  },
+
+  // Get SIM icon container class based on SIM status
+  // Color scheme:
+  //   Green (active): "Active" or "READY" - SIM is ready and working
+  //   Yellow/Orange (warning): "SIM PIN", "SIM PIN2", "PH-NET PIN" - PIN required
+  //   Red (danger): "No SIM", "SIM PUK", "SIM PUK2", or any error state
+  getSimIconClass() {
+    const status = String(this.simStatus || 'No SIM').trim().toUpperCase();
+    
+    if (status === 'ACTIVE' || status === 'READY') {
+      // Green: SIM is ready and working
+      return 'icon-container icon-sim sim-active';
+    } else if (status.includes('PIN') || status.includes('PUK')) {
+      // Yellow/Orange: PIN/PUK required (warning state)
+      return 'icon-container icon-sim sim-warning';
+    } else {
+      // Red: No SIM or error state
+      return 'icon-container icon-sim sim-error';
     }
   },
 

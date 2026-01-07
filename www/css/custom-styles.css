@@ -1830,6 +1830,18 @@ html[data-bs-theme="light"] .btn-close {
   background: var(--danger-gradient);
 }
 
+.icon-container.sim-active {
+  background: var(--success-gradient);
+}
+
+.icon-container.sim-warning {
+  background: var(--warning-gradient);
+}
+
+.icon-container.sim-error {
+  background: var(--danger-gradient);
+}
+
 /* ====================================
    Modern Badges
    ==================================== */
