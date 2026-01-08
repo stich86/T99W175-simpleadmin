@@ -5,6 +5,7 @@ DefaultDependencies=no
 
 [Service]
 Type=oneshot
+ExecStartPre=/bin/sleep 20
 ExecStart=/opt/scripts/ttl/ttl-override start
 User=root
 
