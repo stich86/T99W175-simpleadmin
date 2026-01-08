@@ -2168,6 +2168,7 @@ function processAllInfos() {
 
       return {
         rat: entry.technology,
+        role: entry.role,
         band: Number.isNaN(bandNumber) ? null : bandNumber,
         rsrp_dBm: getMetricValue("rsrp"),
         rsrq_dB: getMetricValue("rsrq"),
@@ -2178,6 +2179,8 @@ function processAllInfos() {
 
     const lteCarriers = carriers.filter((carrier) => carrier.rat === "LTE");
     const nrCarriers = carriers.filter((carrier) => carrier.rat === "NR");
+    const lteSecondaryCarriers = lteCarriers.filter((carrier) => carrier.role === "secondary");
+    const lteSecondaryCount = lteSecondaryCarriers.length;
 
     const median = (values) => {
       const items = values.filter((value) => typeof value === "number").sort((a, b) => a - b);
@@ -2285,6 +2288,13 @@ function processAllInfos() {
     const lteCaCount = lteCarriers.length;
     const nrCount = nrCarriers.length;
 
+    const caSinrZeroCount = lteSecondaryCarriers.filter((carrier) =>
+      typeof carrier.sinr_dB === "number" && Math.abs(carrier.sinr_dB) === 0
+    ).length;
+    const warnCaSinrZero = lteSecondaryCount > 0 &&
+      (caSinrZeroCount > 1 || (caSinrZeroCount === lteSecondaryCount && caSinrZeroCount > 0));
+    const warnCaReleased = lteCarriers.length > 0 && lteSecondaryCount === 0;
+
     const lteCongested = typeof lteRsrpMed === "number" &&
       lteRsrpMed >= -95 &&
       ((typeof lteSinrMed === "number" && lteSinrMed <= 3) ||
@@ -2320,6 +2330,17 @@ function processAllInfos() {
 
     const secondaryNotes = [];
 
+    const buildSecondaryNotes = (notes) => {
+      const combined = Array.isArray(notes) ? [...notes] : [];
+      if (warnCaSinrZero) {
+        combined.push("CA SINR can stay at 0 dB on secondary carriers when there is no traffic; rules may be influenced during idle periods.");
+      }
+      if (warnCaReleased) {
+        combined.push("When there is no traffic the modem may release all CA carriers; some rules can trigger even if coverage is unchanged.");
+      }
+      return combined;
+    };
+
     if (!lteCongested && !nrCongested) {
       const overallGood = (typeof lteScoreMed === "number" && lteScoreMed >= 80) ||
         (nrCount > 0 && typeof nrScoreMed === "number" && nrScoreMed >= 80);
@@ -2329,7 +2350,7 @@ function processAllInfos() {
           primary_message: "Signal quality looks good across the observed carriers.",
           why: [],
           suggestions: [],
-          secondary_notes: [],
+          secondary_notes: buildSecondaryNotes([]),
         };
       }
     }
@@ -2356,7 +2377,7 @@ function processAllInfos() {
             "Move the router toward a window or higher position.",
             "Try small rotations/repositioning (especially with directional antennas).",
           ],
-          secondary_notes: [],
+          secondary_notes: buildSecondaryNotes([]),
         };
       }
       secondaryNotes.push("Possible low vs high band imbalance (distance/attenuation).");
@@ -2397,7 +2418,7 @@ function processAllInfos() {
             "Test at different times of day.",
             "If using a directional antenna, try small re-aim adjustments.",
           ],
-          secondary_notes: [],
+          secondary_notes: buildSecondaryNotes([]),
         };
       }
       secondaryNotes.push("Possible congestion/interference detected.");
@@ -2426,7 +2447,7 @@ function processAllInfos() {
             "Reposition/rotate the device toward the likely 5G direction (n78 is more sensitive).",
             "Verify 5G availability at your location and test near a window/outdoors.",
           ],
-          secondary_notes: [],
+          secondary_notes: buildSecondaryNotes([]),
         };
       }
       secondaryNotes.push("5G appears weaker than strong LTE CA.");
@@ -2455,7 +2476,7 @@ function processAllInfos() {
             "Try a better placement (near a window or higher position).",
             "Consider an external antenna and avoid thick walls.",
           ],
-          secondary_notes: [],
+          secondary_notes: buildSecondaryNotes([]),
         };
       }
       secondaryNotes.push("Overall coverage looks weak.");
@@ -2478,7 +2499,7 @@ function processAllInfos() {
           suggestions: [
             "Improve RSRP first (placement/antenna) to enable more stable CA.",
           ],
-          secondary_notes: [],
+          secondary_notes: buildSecondaryNotes([]),
         };
       }
       secondaryNotes.push("Carrier aggregation may be limited by weak signal.");
@@ -2490,7 +2511,7 @@ function processAllInfos() {
         primary_message: "No strong issues were detected, but see secondary notes.",
         why: [],
         suggestions: [],
-        secondary_notes: secondaryNotes,
+        secondary_notes: buildSecondaryNotes(secondaryNotes),
       };
     }
 
@@ -2499,7 +2520,7 @@ function processAllInfos() {
       primary_message: "No clear issues were detected with the current signals.",
       why: [],
       suggestions: [],
-      secondary_notes: [],
+      secondary_notes: buildSecondaryNotes([]),
     };
   },
 
