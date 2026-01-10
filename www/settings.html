@@ -62,6 +62,7 @@
     <script src="js/settings.js"></script>
     <script src="js/atcommand-utils.js"></script>
     <script src="js/reboot-utils.js" defer></script>
+    <script src="js/device-info.js"></script>
     <script src="js/dark-mode.js" defer></script>
   </head>
   <body data-require-auth="true">
@@ -73,20 +74,34 @@
             <img id="themeLogo" src="img/logo-light.png" alt="Simple T99" style="height: 50px; width: auto;">
           </a>
           <!-- RIGHT CONTROLS (mobile + desktop) -->
-          <div class="d-flex align-items-center ms-auto gap-2 order-lg-3">
+          <div class="d-flex align-items-center ms-auto gap-1 order-lg-3">
             <!-- Dark mode MOBILE -->
             <button
               id="darkModeToggleMobile"
-              class="btn btn-blink d-lg-none"
+              class="btn btn-blink btn-sm d-lg-none"
               type="button"
               aria-label="Toggle dark mode">
                 <svg class="dark-mode-icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" style="display: none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                 <svg class="dark-mode-icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             </button>
+            <!-- Device Info MOBILE -->
+            <button
+              id="deviceInfoToggleMobile"
+              class="btn btn-blink btn-sm d-lg-none"
+              type="button"
+              aria-label="Device Information"
+              data-bs-toggle="modal"
+              data-bs-target="#deviceInfoModal">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+            </button>
             <!-- Reboot MOBILE -->
             <button
               data-reboot-action
-              class="btn btn-blink d-lg-none"
+              class="btn btn-blink btn-sm d-lg-none"
               type="button"
               aria-label="Reboot device"
               data-requires-admin>
@@ -120,7 +135,6 @@
           <!-- COLLAPSABLE MENU -->
           <div class="collapse navbar-collapse order-lg-2 flex-grow-1 justify-content-lg-center" id="navbarText">
             <ul class="navbar-nav mb-2 mb-lg-0">
-              <li class="nav-item">
                 <a class="nav-link" href="/">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align: text-bottom; margin-right: 0.5rem;">
                     <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -128,7 +142,6 @@
                   </svg>
                   Home
                 </a>
-              </li>
               <li class="nav-item dropdown" data-role-access="admin">
                 <a class="nav-link dropdown-toggle active-admin" href="#" role="button" data-bs-toggle="dropdown">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align: text-bottom; margin-right: 0.5rem;">
@@ -162,24 +175,12 @@
                   </a></li>
                 </ul>
               </li>
-              <li class="nav-item">
                 <a class="nav-link" href="/sms.html">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align: text-bottom; margin-right: 0.5rem;">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                   </svg>
                   SMS
                 </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="/deviceinfo.html">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align: text-bottom; margin-right: 0.5rem;">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="16" x2="12" y2="12"/>
-                    <line x1="12" y1="8" x2="12.01" y2="8"/>
-                  </svg>
-                  Device Info
-                </a>
-              </li>
             </ul>
           </div>
           <!-- DESKTOP RIGHT SIDE -->
@@ -196,6 +197,20 @@
               aria-label="Toggle dark mode">
               <svg class="dark-mode-icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" style="display: none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
               <svg class="dark-mode-icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            <!-- Device Info DESKTOP -->
+            <button
+              id="deviceInfoToggleDesktop"
+              class="btn btn-blink btn-sm"
+              type="button"
+              aria-label="Device Information"
+              data-bs-toggle="modal"
+              data-bs-target="#deviceInfoModal">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
             </button>
             <!-- Reboot DESKTOP -->
             <button
@@ -989,9 +1004,237 @@
 
 
 
-    </main>
+  </main>
 
-    <!-- Global Reboot Modal Confirmation -->
+  <!-- Device Info Modal -->
+  <div class="modal fade" id="deviceInfoModal" tabindex="-1" aria-labelledby="deviceInfoModalLabel" aria-hidden="true" x-data="fetchDeviceInfo()">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="deviceInfoModalLabel">Device Information</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive">
+            <table class="table">
+              <tbody>
+                <tr>
+                  <th scope="row">Manufacturer</th>
+                  <td x-text="manufacturer"></td>
+                </tr>
+                <tr>
+                  <th scope="row">Model Name</th>
+                  <td x-text="modelName"></td>
+                </tr>
+                <tr>
+                  <th scope="row">Firmware version</th>
+                  <td class="col-md-2" x-text="firmwareVersion"></td>
+                </tr>
+                <tr>
+                  <th scope="row">Phone Number</th>
+                  <td class="col-md-2" style="white-space: nowrap;">
+                    <span x-text="phoneNumber"></span>
+                    <button 
+                      type="button"
+                      class="btn btn-link p-0 border-0 text-muted"
+                      style="padding: 0 !important; margin-left: 0.25em; vertical-align: baseline; line-height: inherit; display: inline-block;"
+                      @click="copyToClipboard(phoneNumber); const btn = $event.target.closest('button'); btn.classList.add('text-success'); setTimeout(() => btn.classList.remove('text-success'), 1000);"
+                      title="Copy Phone Number to clipboard">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em; display: inline-block; vertical-align: middle;">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">IMSI</th>
+                  <td class="col-md-2" x-text="imsi"></td>
+                </tr>
+                <tr>
+                  <th scope="row">ICCID</th>
+                  <td class="col-md-2" style="white-space: nowrap;">
+                    <span x-text="iccid"></span>
+                    <button 
+                      type="button"
+                      class="btn btn-link p-0 border-0 text-muted"
+                      style="padding: 0 !important; margin-left: 0.25em; vertical-align: baseline; line-height: inherit; display: inline-block;"
+                      @click="copyToClipboard(iccid); const btn = $event.target.closest('button'); btn.classList.add('text-success'); setTimeout(() => btn.classList.remove('text-success'), 1000);"
+                      title="Copy ICCID to clipboard">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em; display: inline-block; vertical-align: middle;">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">IMEI</th>
+                  <td class="col-md-2" style="white-space: nowrap;">
+                    <span x-text="imei"></span>
+                    <button 
+                      type="button"
+                      class="btn btn-link p-0 border-0 text-muted"
+                      style="padding: 0 !important; margin-left: 0.25em; vertical-align: baseline; line-height: inherit; display: inline-block;"
+                      @click="copyToClipboard(imei); const btn = $event.target.closest('button'); btn.classList.add('text-success'); setTimeout(() => btn.classList.remove('text-success'), 1000);"
+                      title="Copy IMEI to clipboard">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em; display: inline-block; vertical-align: middle;">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </button>
+                    <button 
+                      type="button" 
+                      class="btn btn-sm btn-link p-0"
+                      style="padding: 0 !important; margin-left: 0.25em; vertical-align: baseline; line-height: inherit; display: inline-block;"
+                      data-requires-admin="hide"
+                      @click="openImeiModal()"
+                      title="Edit IMEI"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="grey" class="bi bi-pencil" viewBox="0 0 16 16">
+                        <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">LAN IP</th>
+                  <td class="col-md-2" style="white-space: nowrap;">
+                    <span x-text="lanIp"></span>
+                    <button 
+                      type="button"
+                      class="btn btn-link p-0 border-0 text-muted"
+                      style="padding: 0 !important; margin-left: 0.25em; vertical-align: baseline; line-height: inherit; display: inline-block;"
+                      @click="copyToClipboard(lanIp); const btn = $event.target.closest('button'); btn.classList.add('text-success'); setTimeout(() => btn.classList.remove('text-success'), 1000);"
+                      title="Copy LAN IP to clipboard">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em; display: inline-block; vertical-align: middle;">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">WAN IPv4</th>
+                  <td class="col-md-2" style="white-space: nowrap;">
+                    <span x-text="wwanIpv4"></span>
+                    <button 
+                      type="button"
+                      class="btn btn-link p-0 border-0 text-muted"
+                      style="padding: 0 !important; margin-left: 0.25em; vertical-align: baseline; line-height: inherit; display: inline-block;"
+                      @click="copyToClipboard(wwanIpv4); const btn = $event.target.closest('button'); btn.classList.add('text-success'); setTimeout(() => btn.classList.remove('text-success'), 1000);"
+                      title="Copy WAN IPv4 to clipboard">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em; display: inline-block; vertical-align: middle;">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">WAN IPv6</th>
+                  <td class="col-md-2" style="white-space: nowrap;">
+                    <span x-text="wwanIpv6"></span>
+                    <button 
+                      type="button"
+                      class="btn btn-link p-0 border-0 text-muted"
+                      style="padding: 0 !important; margin-left: 0.25em; vertical-align: baseline; line-height: inherit; display: inline-block;"
+                      @click="copyToClipboard(wwanIpv6); const btn = $event.target.closest('button'); btn.classList.add('text-success'); setTimeout(() => btn.classList.remove('text-success'), 1000);"
+                      title="Copy WAN IPv6 to clipboard">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 1em; height: 1em; display: inline-block; vertical-align: middle;">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMEI Edit Modals (from deviceinfo.html) -->
+  <div class="modal-overlay" x-show="showImeiWarningModal" x-cloak>
+    <div class="loading-modal" style="max-width: 500px;">
+      <div class="loading-text" style="display: flex; flex-direction: column">
+        <h4 class="text-warning">⚠️ Legal Warning</h4>
+        <p style="margin-top: 1rem; text-align: left;">
+          Changing the IMEI is <strong>only permitted in countries where it is legal</strong>. 
+          In many jurisdictions, modifying the IMEI is <strong>illegal</strong> and may result in criminal penalties.
+        </p>
+        <p style="text-align: left;">
+          By proceeding, you confirm that you are authorized to modify this device's IMEI 
+          and that doing so is legal in your jurisdiction.
+        </p>
+      </div>
+      <div class="d-flex justify-content-center gap-3 mt-3">
+        <button
+          class="btn btn-primary"
+          type="button"
+          @click="acceptImeiWarning()"
+        >
+          I Understand - Continue
+        </button>
+        <button
+          class="btn btn-secondary"
+          type="button"
+          @click="closeImeiWarningModal()"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" x-show="showImeiInputModal" x-cloak>
+    <div class="loading-modal" style="max-width: 450px;">
+      <div class="loading-text" style="display: flex; flex-direction: column">
+        <h4>Edit IMEI</h4>
+        <p style="margin-top: 0.5rem; text-align: left;">
+          Current IMEI: <strong x-text="imei"></strong>
+        </p>
+        <div class="mb-3 text-start">
+          <label for="newImeiInput" class="form-label">New IMEI (15 digits)</label>
+          <input 
+            type="text" 
+            class="form-control" 
+            id="newImeiInput"
+            x-model="newImei"
+            maxlength="15"
+            pattern="[0-9]{15}"
+            placeholder="Enter 15 digit IMEI"
+            @input="validateImeiInput()"
+          />
+          <div class="form-text" x-show="imeiValidationError" x-text="imeiValidationError" style="color: #dc3545;"></div>
+        </div>
+      </div>
+      <div class="d-flex justify-content-center gap-3 mt-3">
+        <button
+          class="btn btn-primary"
+          type="button"
+          @click="confirmImeiChange()"
+          :disabled="!isImeiValid"
+        >
+          Change IMEI
+        </button>
+        <button
+          class="btn btn-danger"
+          type="button"
+          @click="closeImeiInputModal()"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Reboot Modal Confirmation -->
     <div class="modal-overlay" id="globalRebootModal" style="display: none;">
       <div class="loading-modal">
         <div class="loading-text" style="display: flex; flex-direction: column">

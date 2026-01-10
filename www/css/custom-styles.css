@@ -225,21 +225,29 @@ button[data-reboot-action]:hover svg {
   stroke: var(--danger-color);
 }
 
-/* Ensure consistent spacing in navbar desktop section */
-.d-none.d-lg-flex.align-items-center.gap-1 > * {
-  margin: 0;
-  padding: 0;
+/* Ensure consistent spacing in navbar icon sections */
+.d-flex.align-items-center.gap-1.order-lg-3 > .btn,
+.d-none.d-lg-flex.align-items-center.gap-1 > .btn {
+  margin: 0 !important;
+  padding: 0.25rem !important;
+  min-width: auto;
+  width: auto;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
+.d-flex.align-items-center.gap-1.order-lg-3 .navbar-user-section,
 .d-none.d-lg-flex.align-items-center.gap-1 .navbar-user-section {
   margin-right: 0;
   padding-right: 0;
 }
 
-.d-none.d-lg-flex.align-items-center.gap-1 .btn,
+.d-flex.align-items-center.gap-1.order-lg-3 .logout-link,
 .d-none.d-lg-flex.align-items-center.gap-1 .logout-link {
-  margin: 0;
-  padding: 0.25rem;
+  margin: 0 !important;
+  padding: 0.25rem !important;
 }
 
 /* Dark mode icon toggle */
