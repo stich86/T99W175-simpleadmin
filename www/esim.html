@@ -61,7 +61,8 @@
     <script src="js/login-config.js" defer></script>
     <script src="js/index-login.js" defer></script>
     <script src="js/esim.js"></script>
-  
+    <script src="js/atcommand-utils.js"></script>
+    <script src="js/reboot-utils.js" defer></script>
     <script src="js/dark-mode.js" defer></script>
   </head>
   <body data-require-auth="true">
@@ -82,6 +83,20 @@
               aria-label="Toggle dark mode">
                 <svg class="dark-mode-icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" style="display: none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                 <svg class="dark-mode-icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            <!-- Reboot MOBILE -->
+            <button
+              data-reboot-action
+              class="btn btn-blink d-lg-none"
+              type="button"
+              aria-label="Reboot device"
+              data-requires-admin>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                <path d="M3 21v-5h5"/>
+              </svg>
             </button>
             <!-- Hamburger -->
             <button
@@ -186,6 +201,20 @@
               aria-label="Toggle dark mode">
               <svg class="dark-mode-icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" style="display: none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
               <svg class="dark-mode-icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            </button>
+            <!-- Reboot DESKTOP -->
+            <button
+              data-reboot-action
+              class="btn btn-blink btn-sm"
+              type="button"
+              aria-label="Reboot device"
+              data-requires-admin>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                <path d="M3 21v-5h5"/>
+              </svg>
             </button>
             <!-- Logout DESKTOP -->
             <a href="#" class="logout-link" id="logoutButtonDesktop">
@@ -596,5 +625,38 @@
       </div>
     </footer>
     </main>
+
+    <!-- Global Reboot Modal Confirmation -->
+    <div class="modal-overlay" id="globalRebootModal" style="display: none;">
+      <div class="loading-modal">
+        <div class="loading-text" style="display: flex; flex-direction: column">
+          <h3>This will reboot the modem.</h3>
+          <p style="margin-top: 0.5rem">Continue?</p>
+        </div>
+        <div class="d-grid gap-2 d-md-block">
+          <button class="btn btn-primary" type="button" id="globalRebootConfirm">
+            Reboot
+          </button>
+          <button class="btn btn-danger" type="button" id="globalRebootCancel">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Reboot Modal Countdown -->
+    <div class="modal-overlay" id="globalRebootCountdownModal" style="display: none;">
+      <div class="loading-modal">
+        <div class="loader"></div>
+        <div class="loading-text" style="display: flex; flex-direction: column">
+          <h3>Rebooting...</h3>
+          <p style="margin-top: 0.5rem">
+            Please wait for
+            <span id="rebootCountdown" style="font-weight: 500">40</span>
+            seconds.
+          </p>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

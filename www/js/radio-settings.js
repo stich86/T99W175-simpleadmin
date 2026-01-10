@@ -1204,10 +1204,23 @@ function cellLocking() {
       this.countdown = 10;
       this.showModalAPN = true;
 
+      // Start countdown interval immediately
+      const interval = setInterval(() => {
+        this.countdown--;
+        if (this.countdown === 0) {
+          clearInterval(interval);
+          this.showModalAPN = false;
+          this.newApn = null;
+          this.newApnIP = null;
+          this.init();
+        }
+      }, 1000);
+
       if (requiresBasebandRestart) {
         const cleanupResult = await this.ensurePrimaryApnProfile();
 
         if (!cleanupResult.ok) {
+          clearInterval(interval);
           this.showModalAPN = false;
           alert(
             cleanupResult.message ||
@@ -1221,6 +1234,7 @@ function cellLocking() {
         const result = await this.sendATcommand(step.command);
 
         if (!result.ok) {
+          clearInterval(interval);
           this.showModalAPN = false;
           alert(
             this.lastErrorMessage ||
@@ -1235,6 +1249,7 @@ function cellLocking() {
         const radioOff = await this.sendATcommand("AT+CFUN=0");
 
         if (!radioOff.ok) {
+          clearInterval(interval);
           this.showModalAPN = false;
           alert(
             this.lastErrorMessage ||
@@ -1246,6 +1261,7 @@ function cellLocking() {
         const radioOn = await this.sendATcommand("AT+CFUN=1");
 
         if (!radioOn.ok) {
+          clearInterval(interval);
           this.showModalAPN = false;
           alert(
             this.lastErrorMessage ||
@@ -1254,17 +1270,6 @@ function cellLocking() {
           return;
         }
       }
-
-      const interval = setInterval(() => {
-        this.countdown--;
-        if (this.countdown === 0) {
-          clearInterval(interval);
-          this.showModalAPN = false;
-          this.newApn = null;
-          this.newApnIP = null;
-          this.init();
-        }
-      }, 1000);
     },
     async cellLockEnableLTE() {
       const cellNum = this.cellNum;
