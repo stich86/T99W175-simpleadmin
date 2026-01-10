@@ -128,19 +128,45 @@ function monitorPage() {
         if (data.status === 'success') {
           // Show success message and auto-dismiss after 3 seconds
           this.connectionConfigSuccessMessage = 'Configuration saved successfully!';
+          // Return success status for modal handling
+          this._lastSaveSuccess = true;
           setTimeout(() => {
             this.connectionConfigSuccessMessage = '';
           }, 3000);
         } else {
           // Display server-provided error message
           this.connectionConfigErrorMessage = data.message || 'Failed to save configuration';
+          this._lastSaveSuccess = false;
         }
       } catch (error) {
         console.error('Error saving connection config:', error);
         this.connectionConfigErrorMessage = 'Error saving configuration: ' + error.message;
+        this._lastSaveSuccess = false;
       } finally {
         // Always clear loading state
         this.connectionConfigSaving = false;
+      }
+    },
+
+    /**
+     * Saves the connection configuration and returns to connection details modal on success.
+     * 
+     * Calls saveConnectionConfig() and if successful, closes the monitoring modal
+     * and reopens the connection details modal.
+     */
+    async saveAndReturn() {
+      await this.saveConnectionConfig();
+      if (this._lastSaveSuccess) {
+        setTimeout(() => {
+          const monitoringModal = bootstrap.Modal.getInstance(document.getElementById('monitoringConfigModal'));
+          if (monitoringModal) {
+            monitoringModal.hide();
+            setTimeout(() => {
+              const connectionModal = new bootstrap.Modal(document.getElementById('connectionModal'));
+              connectionModal.show();
+            }, 300);
+          }
+        }, 500);
       }
     }
   };

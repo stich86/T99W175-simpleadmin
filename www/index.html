@@ -62,6 +62,7 @@
     <script src="js/index-process.js"></script>
     <script src="js/atcommand-utils.js"></script>
     <script src="js/reboot-utils.js" defer></script>
+    <script src="js/monitor.js"></script>
     <script src="js/dark-mode.js" defer></script>
   </head>
   <body data-require-auth="true">
@@ -143,10 +144,6 @@
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
                     Advanced
                   </a></li>
-                  <li><a class="dropdown-item" href="/monitor.html">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                    Monitoring
-                  </a></li>
                   <li id="configMenuDivider"><hr class="dropdown-divider"></li>
                   <li id="usersMenuItem"><a class="dropdown-item" href="/credentials.html">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -187,7 +184,7 @@
             </ul>
           </div>
           <!-- DESKTOP RIGHT SIDE -->
-          <div class="d-none d-lg-flex align-items-center gap-3 ms-auto order-lg-3">
+          <div class="d-none d-lg-flex align-items-center gap-1 ms-auto order-lg-3">
             <div class="navbar-user-section">
               <div class="navbar-user-avatar" id="userAvatar">A</div>
               <span class="navbar-user-name" id="navUserName"></span>
@@ -1095,9 +1092,23 @@
         <div class="modal fade" id="connectionModal" tabindex="-1" aria-labelledby="connectionModalLabel" aria-hidden="true">
           <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-              <div class="modal-header">
+              <div class="modal-header d-flex justify-content-between align-items-center">
                 <h5 class="modal-title" id="connectionModalLabel">Connection Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="d-flex align-items-center gap-2">
+                  <button 
+                    type="button" 
+                    class="btn-close btn-close-cog" 
+                    onclick="const connectionModal = bootstrap.Modal.getInstance(document.getElementById('connectionModal')); connectionModal.hide(); setTimeout(() => { const monitoringModal = new bootstrap.Modal(document.getElementById('monitoringConfigModal')); monitoringModal.show(); }, 300);"
+                    aria-label="Configure monitoring"
+                    title="Configure monitoring"
+                    style="background-image: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
               </div>
               <div class="modal-body">
                 <div class="card-text">
@@ -1202,6 +1213,91 @@
                     </template>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Monitoring Configuration Modal -->
+        <div class="modal fade" id="monitoringConfigModal" tabindex="-1" aria-labelledby="monitoringConfigModalLabel" aria-hidden="true" x-data="monitorPage()">
+          <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+              <div class="modal-header d-flex justify-content-between align-items-center">
+                <h5 class="modal-title" id="monitoringConfigModalLabel">Connection Monitoring Configuration</h5>
+                <button 
+                  type="button" 
+                  class="btn-close" 
+                  onclick="const monitoringModal = bootstrap.Modal.getInstance(document.getElementById('monitoringConfigModal')); monitoringModal.hide(); setTimeout(() => { const connectionModal = new bootstrap.Modal(document.getElementById('connectionModal')); connectionModal.show(); }, 300);"
+                  aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <template x-if="connectionConfigSuccessMessage">
+                  <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                    <span x-text="connectionConfigSuccessMessage"></span>
+                    <button type="button" class="btn-close" @click="connectionConfigSuccessMessage = ''"></button>
+                  </div>
+                </template>
+
+                <template x-if="connectionConfigErrorMessage">
+                  <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                    <span x-text="connectionConfigErrorMessage"></span>
+                    <button type="button" class="btn-close" @click="connectionConfigErrorMessage = ''"></button>
+                  </div>
+                </template>
+
+                <p class="text-body-secondary mb-3">
+                  Configure ping targets and DNS resolution tests for connection monitoring.
+                </p>
+
+                <div class="mb-4">
+                  <label class="form-label" for="pingTargets">Ping Targets</label>
+                  <input
+                    id="pingTargets"
+                    class="form-control"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="8.8.8.8,1.1.1.1"
+                    x-model="connectionConfigForm.pingTargets"
+                    :disabled="connectionConfigSaving"
+                  />
+                  <div class="form-text">
+                    Enter multiple hosts separated by commas. These hosts will be pinged to test connectivity.
+                  </div>
+                </div>
+
+                <div class="mb-4">
+                  <label class="form-label" for="dnsTests">DNS Resolution Tests</label>
+                  <input
+                    id="dnsTests"
+                    class="form-control"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="8.8.8.8:www.google.com,1.1.1.1:www.google.com"
+                    x-model="connectionConfigForm.dnsTests"
+                    :disabled="connectionConfigSaving"
+                  />
+                  <div class="form-text">
+                    Enter DNS server and domain pairs in the format <code>server:domain</code>, separated by commas. Example: <code>8.8.8.8:www.google.com,1.1.1.1:www.google.com</code>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button 
+                  type="button" 
+                  class="btn btn-secondary" 
+                  onclick="const monitoringModal = bootstrap.Modal.getInstance(document.getElementById('monitoringConfigModal')); monitoringModal.hide(); setTimeout(() => { const connectionModal = new bootstrap.Modal(document.getElementById('connectionModal')); connectionModal.show(); }, 300);">Close</button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  :disabled="connectionConfigSaving"
+                  @click="saveAndReturn()"
+                >
+                  <span x-show="!connectionConfigSaving">Save Configuration</span>
+                  <span x-show="connectionConfigSaving">
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    Saving...
+                  </span>
+                </button>
               </div>
             </div>
           </div>

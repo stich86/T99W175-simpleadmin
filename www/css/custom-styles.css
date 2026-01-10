@@ -211,6 +211,37 @@ html[data-bs-theme="dark"] .nav-link.dropdown-toggle.active-admin:hover {
   color: var(--danger-color) !important;
 }
 
+/* Reboot button hover effect */
+button[data-reboot-action] {
+  color: var(--text-secondary) !important;
+  transition: var(--transition-fast);
+}
+
+button[data-reboot-action]:hover {
+  color: var(--danger-color) !important;
+}
+
+button[data-reboot-action]:hover svg {
+  stroke: var(--danger-color);
+}
+
+/* Ensure consistent spacing in navbar desktop section */
+.d-none.d-lg-flex.align-items-center.gap-1 > * {
+  margin: 0;
+  padding: 0;
+}
+
+.d-none.d-lg-flex.align-items-center.gap-1 .navbar-user-section {
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.d-none.d-lg-flex.align-items-center.gap-1 .btn,
+.d-none.d-lg-flex.align-items-center.gap-1 .logout-link {
+  margin: 0;
+  padding: 0.25rem;
+}
+
 /* Dark mode icon toggle */
 html[data-bs-theme="dark"] .dark-mode-icon-sun {
   display: inline-block !important;
@@ -234,6 +265,8 @@ html[data-bs-theme="light"] .dark-mode-icon-moon {
   align-items: center;
   gap: 0.75rem;
   flex-shrink: 0;
+  margin-right: 0;
+  padding-right: 0;
 }
 
 .navbar-user-avatar {
@@ -1709,6 +1742,23 @@ html[data-bs-theme="dark"] .btn-close {
 
 html[data-bs-theme="light"] .btn-close {
   filter: invert(0) grayscale(0%);
+}
+
+/* Cog button matching btn-close styling - override Bootstrap's 1em size */
+button.btn-close.btn-close-cog {
+  width: 1.15em !important;
+  height: 1.15em !important;
+  padding: 0.25em !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+button.btn-close.btn-close-cog svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  flex-shrink: 0;
 }
 
 /* Modal scrollbar styling */
