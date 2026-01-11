@@ -150,7 +150,7 @@ function monitorPage() {
 
     /**
      * Saves the connection configuration and returns to connection details modal on success.
-     * 
+     *
      * Calls saveConnectionConfig() and if successful, closes the monitoring modal
      * and reopens the connection details modal.
      */
@@ -167,6 +167,40 @@ function monitorPage() {
             }, 300);
           }
         }, 500);
+      }
+    },
+
+    /**
+     * Closes the monitoring configuration modal and opens the connection details modal.
+     * Used by the "Close" button in the monitoring modal footer.
+     */
+    closeAndOpenConnection() {
+      const monitoringModalEl = document.getElementById('monitoringConfigModal');
+      const monitoringModal = bootstrap.Modal.getInstance(monitoringModalEl);
+      if (monitoringModal) {
+        monitoringModal.hide();
+        setTimeout(() => {
+          const connectionModalEl = document.getElementById('connectionModal');
+          const connectionModal = new bootstrap.Modal(connectionModalEl);
+          connectionModal.show();
+        }, 300);
+      }
+    },
+
+    /**
+     * Closes the connection details modal and opens the monitoring configuration modal.
+     * Used by the button in the connection modal header.
+     */
+    closeAndOpenMonitoring() {
+      const connectionModalEl = document.getElementById('connectionModal');
+      const connectionModal = bootstrap.Modal.getInstance(connectionModalEl);
+      if (connectionModal) {
+        connectionModal.hide();
+        setTimeout(() => {
+          const monitoringModalEl = document.getElementById('monitoringConfigModal');
+          const monitoringModal = new bootstrap.Modal(monitoringModalEl);
+          monitoringModal.show();
+        }, 300);
       }
     }
   };

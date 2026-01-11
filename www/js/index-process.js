@@ -3155,6 +3155,23 @@ function processAllInfos() {
   },
 
   /**
+   * Closes the connection details modal and opens the monitoring configuration modal.
+   * Used by the settings button in the connection modal header.
+   */
+  closeAndOpenMonitoring() {
+    const connectionModalEl = document.getElementById('connectionModal');
+    const connectionModal = bootstrap.Modal.getInstance(connectionModalEl);
+    if (connectionModal) {
+      connectionModal.hide();
+      setTimeout(() => {
+        const monitoringModalEl = document.getElementById('monitoringConfigModal');
+        const monitoringModal = new bootstrap.Modal(monitoringModalEl);
+        monitoringModal.show();
+      }, 300);
+    }
+  },
+
+  /**
    * Validate IMEI input
    */
   validateImeiInput() {

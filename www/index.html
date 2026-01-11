@@ -1115,10 +1115,10 @@
               <div class="modal-header d-flex justify-content-between align-items-center">
                 <h5 class="modal-title" id="connectionModalLabel">Connection Details</h5>
                 <div class="d-flex align-items-center gap-2">
-                  <button 
-                    type="button" 
-                    class="btn-close btn-close-cog" 
-                    onclick="const connectionModal = bootstrap.Modal.getInstance(document.getElementById('connectionModal')); connectionModal.hide(); setTimeout(() => { const monitoringModal = new bootstrap.Modal(document.getElementById('monitoringConfigModal')); monitoringModal.show(); }, 300);"
+                  <button
+                    type="button"
+                    class="btn-close btn-close-cog"
+                    @click="closeAndOpenMonitoring()"
                     aria-label="Configure monitoring"
                     title="Configure monitoring"
                     style="background-image: none;">
@@ -1244,10 +1244,10 @@
             <div class="modal-content">
               <div class="modal-header d-flex justify-content-between align-items-center">
                 <h5 class="modal-title" id="monitoringConfigModalLabel">Connection Monitoring Configuration</h5>
-                <button 
-                  type="button" 
-                  class="btn-close" 
-                  onclick="const monitoringModal = bootstrap.Modal.getInstance(document.getElementById('monitoringConfigModal')); monitoringModal.hide(); setTimeout(() => { const connectionModal = new bootstrap.Modal(document.getElementById('connectionModal')); connectionModal.show(); }, 300);"
+                <button
+                  type="button"
+                  class="btn-close"
+                  @click="closeAndOpenConnection()"
                   aria-label="Close"></button>
               </div>
               <div class="modal-body">
@@ -1302,10 +1302,10 @@
                 </div>
               </div>
               <div class="modal-footer">
-                <button 
-                  type="button" 
-                  class="btn btn-secondary" 
-                  onclick="const monitoringModal = bootstrap.Modal.getInstance(document.getElementById('monitoringConfigModal')); monitoringModal.hide(); setTimeout(() => { const connectionModal = new bootstrap.Modal(document.getElementById('connectionModal')); connectionModal.show(); }, 300);">Close</button>
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  @click="closeAndOpenConnection()">Close</button>
                 <button
                   type="button"
                   class="btn btn-primary"
@@ -1468,9 +1468,6 @@
                     </tbody>
                   </table>
                 </div>
-              </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
               </div>
 
               <!-- IMEI Edit Modals (inside deviceInfoModal scope) -->
