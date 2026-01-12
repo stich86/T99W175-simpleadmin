@@ -683,3 +683,217 @@ OK
 * Use AT^DEBUG? to verify the active RAT after changing the mode
 
 
+---
+
+## WIP
+
+### AT
+
+```text
+AT
+```
+
+### AT&F
+
+```text
+AT&F
+```
+
+### AT+CFUN
+
+```text
+AT+CFUN?
+AT+CFUN=0
+AT+CFUN=1
+AT+CFUN=1,1
+```
+
+### AT+CPIN?
+
+```text
+AT+CPIN?
+```
+
+### AT+CGMI
+
+```text
+AT+CGMI
+```
+
+### AT+CGMM
+
+```text
+AT+CGMM
+```
+
+### AT+SKUID
+
+```text
+AT+SKUID
+```
+
+### AT^VERSION?
+
+```text
+AT^VERSION?
+```
+
+### AT+CGSN
+
+```text
+AT+CGSN
+```
+
+### AT+CIMI
+
+```text
+AT+CIMI
+```
+
+### AT+ICCID
+
+```text
+AT+ICCID
+```
+
+### AT+CNUM
+
+```text
+AT+CNUM
+```
+
+### AT+CGCONTRDP
+
+```text
+AT+CGCONTRDP
+AT+CGCONTRDP=1
+```
+
+### AT+CGPIAF
+
+```text
+AT+CGPIAF=1,1,1,1
+```
+
+### AT+CGDCONT
+
+```text
+AT+CGDCONT?
+AT+CGDCONT=<cid>
+AT+CGDCONT=1,"<type>","<apn>"
+```
+
+### AT+CREG?
+
+```text
+AT+CREG?
+```
+
+### AT+COPS?
+
+```text
+AT+COPS?
+```
+
+### AT+CSQ
+
+```text
+AT+CSQ
+```
+
+### AT^SLMODE
+
+```text
+AT^SLMODE?
+AT^SLMODE=1,<mode>
+AT^SLMODE=1,0
+AT^SLMODE=1,7
+```
+
+### AT^CA_INFO?
+
+```text
+AT^CA_INFO?
+```
+
+### AT^NV
+
+```text
+AT^NV=550,0
+AT^NV=550,<len>,"<payload>"
+```
+
+### $QCSIMSTAT?
+
+```text
+$QCSIMSTAT?
+```
+
+### AT+CSCS
+
+```text
+AT+CSCS="GSM"
+AT+CSCS="UCS2"
+```
+
+### AT+CSMS
+
+```text
+AT+CSMS=1
+```
+
+### AT+CSDH
+
+```text
+AT+CSDH=0
+```
+
+### AT+CNMI
+
+```text
+AT+CNMI=2,1,0,0,0
+```
+
+### AT+CMGF
+
+```text
+AT+CMGF=1
+```
+
+### AT+CSCA?
+
+```text
+AT+CSCA?
+```
+
+### AT+CSMP
+
+```text
+AT+CSMP=17,167,0,8
+```
+
+### AT+CMGL
+
+```text
+AT+CMGL="ALL"
+```
+
+### AT+CPMS
+
+```text
+AT+CPMS?
+AT+CPMS="<mem>","<mem>","<mem>"
+```
+
+### AT+CMGD
+
+```text
+AT+CMGD=<index>
+AT+CMGD=,4
+```
+
+### AT+CMGS
+
+```text
+AT+CMGS="<phone>"
+```
