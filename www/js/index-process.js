@@ -257,7 +257,22 @@ function processAllInfos() {
       if (simCheckResult.ok && simCheckResult.data) {
         const simStatus = simCheckResult.data.trim();
         simReady = simStatus.includes('READY');
-        simStatusText = simStatus.includes('CPIN:') ? simStatus.split(':')[1].trim() : "No SIM";
+
+        // Extract and normalize SIM status
+        if (simStatus.includes('CPIN:')) {
+          const pinStatus = simStatus.split(':')[1].trim();
+          if (pinStatus === 'READY') {
+            simStatusText = 'Active';
+          } else if (pinStatus.includes('SIM PIN')) {
+            simStatusText = 'PIN Locked';
+          } else if (pinStatus.includes('SIM PUK')) {
+            simStatusText = 'PUK Locked';
+          } else {
+            simStatusText = pinStatus;
+          }
+        } else {
+          simStatusText = "No SIM";
+        }
       }
       
       // If SIM is not ready, get basic info only
@@ -901,10 +916,14 @@ function processAllInfos() {
             .split(":")[1]
             .replace(/"/g, "")
             .trim();
-            
+
           // console.log(sim_status)
           if (sim_status == "READY") {
             this.simStatus = "Active";
+          } else if (sim_status.includes("SIM PIN") || sim_status.includes("PIN")) {
+            this.simStatus = "SIM il pr";
+          } else if (sim_status.includes("PUK")) {
+            this.simStatus = "SIM PUK Locked";
           } else {
             this.simStatus = sim_status;
           }
@@ -2781,12 +2800,12 @@ function processAllInfos() {
   //   Red (danger): "No SIM", "SIM PUK", "SIM PUK2", or any error state
   getSimIconClass() {
     const status = String(this.simStatus || 'No SIM').trim().toUpperCase();
-    
+
     if (status === 'ACTIVE' || status === 'READY') {
       // Green: SIM is ready and working
       return 'icon-container icon-sim sim-active';
-    } else if (status.includes('PIN') || status.includes('PUK')) {
-      // Yellow/Orange: PIN/PUK required (warning state)
+    } else if (status.includes('PIN') || status.includes('PUK') || status.includes('LOCKED')) {
+      // Yellow/Orange: PIN/PUK required or locked (warning state)
       return 'icon-container icon-sim sim-warning';
     } else {
       // Red: No SIM or error state
