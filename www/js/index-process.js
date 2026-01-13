@@ -162,6 +162,7 @@ function processAllInfos() {
     simUnlockMessage: "",
     simUnlockError: "",
     isSimUnlocking: false,
+    simPinHasBeenUnlocked: false,  // Tracks if SIM has been unlocked (PIN entered at least once)
     // Power Amplifier temperature
     paTemperature: "Unknown",
     // Skin temperature
@@ -185,6 +186,9 @@ function processAllInfos() {
     lanIp: "-",
     wwanIpv4: "-",
     wwanIpv6: "-",
+    // SIM unlock prompt modal (first time only)
+    showSimUnlockPrompt: false,
+    simUnlockPromptDismissed: false,
   };
 
   return {
@@ -205,6 +209,9 @@ function processAllInfos() {
         intervalId: this.intervalId,
         simPin: this.simPin,
         simPinDisableMode: this.simPinDisableMode,
+        showSimUnlockPrompt: this.showSimUnlockPrompt,
+        simUnlockPromptDismissed: this.simUnlockPromptDismissed,
+        simPinHasBeenUnlocked: this.simPinHasBeenUnlocked,
       };
 
       Object.assign(
@@ -257,6 +264,11 @@ function processAllInfos() {
       if (simCheckResult.ok && simCheckResult.data) {
         const simStatus = simCheckResult.data.trim();
         simReady = simStatus.includes('READY');
+
+        // If SIM is ready, it means it has been unlocked at some point
+        if (simReady) {
+          this.simPinHasBeenUnlocked = true;
+        }
 
         // Extract and normalize SIM status
         if (simStatus.includes('CPIN:')) {
@@ -342,7 +354,11 @@ function processAllInfos() {
         temperature: tempValue,
         decimalCellId: null
       });
-        return;
+
+      // Check if we should show SIM unlock prompt (only once per session)
+      this.checkSimUnlockPrompt();
+
+      return;
       }
       // SIM is ready, execute full command set
       this.atcmd =
@@ -1721,6 +1737,10 @@ function processAllInfos() {
       .then(res => res.json())
       .then(data => {
         this.lanIp = data.lanip;
+
+        // Check if we should show SIM unlock prompt (only once per session)
+        // Must be here after simStatus is set
+        this.checkSimUnlockPrompt();
       })
       .catch(error => {
         console.error("Error fetching LAN IP:", error);
@@ -2815,13 +2835,20 @@ function processAllInfos() {
 
   isSimPinRequired() {
     const status = String(this.simStatus || '').trim().toUpperCase();
-    return status.includes('SIM PIN');
+    return status.includes('PIN') || status.includes('PUK') || status.includes('LOCKED');
   },
 
   isSimPinSectionDisabled() {
     const status = String(this.simStatus || '').trim().toUpperCase();
     const simReady = status === 'ACTIVE' || status === 'READY';
-    return simReady && !this.isSimPinRequired();
+    return simReady;
+  },
+
+  shouldShowDisablePinOption() {
+    // Show disable PIN option if SIM has been unlocked and is currently active/ready
+    const status = String(this.simStatus || '').trim().toUpperCase();
+    const simReady = status === 'ACTIVE' || status === 'READY';
+    return this.simPinHasBeenUnlocked && simReady;
   },
 
   async unlockSimPin() {
@@ -2885,7 +2912,121 @@ function processAllInfos() {
       this.simUnlockMessage = successMessage;
       this.simStatus = "Active";
       this.simPin = "";
+      this.simPinHasBeenUnlocked = true;  // Mark that SIM has been unlocked
       this.fetchAllInfo();
+    } catch (error) {
+      this.simUnlockError = error.message || "Unexpected error while unlocking SIM.";
+    } finally {
+      this.isSimUnlocking = false;
+    }
+  },
+
+  /**
+   * Disable SIM PIN only (for when SIM is already unlocked from prompt)
+   */
+  async disableSimPinOnly() {
+    const pin = String(this.simPin || '').trim();
+    this.simUnlockError = "";
+    this.simUnlockMessage = "";
+
+    if (!pin) {
+      this.simUnlockError = "Please enter the SIM PIN.";
+      return;
+    }
+
+    this.isSimUnlocking = true;
+
+    try {
+      let successMessage = "";
+
+      if (this.simPinDisableMode === "permanent") {
+        const disableCmd = `AT+CLCK="SC",0,"${pin}"`;
+        const disableResult = await ATCommandService.execute(disableCmd, {
+          retries: 2,
+          timeout: 10000,
+        });
+
+        if (disableResult.ok) {
+          successMessage = "SIM PIN disabled permanently.";
+        } else {
+          const disableError = disableResult.error
+            ? disableResult.error.message
+            : "Failed to disable SIM PIN permanently.";
+          this.simUnlockError = disableError;
+          return;
+        }
+      } else {
+        successMessage = "SIM PIN will be required again after reboot.";
+      }
+
+      this.simUnlockMessage = successMessage;
+      this.simPin = "";
+    } catch (error) {
+      this.simUnlockError = error.message || "Unexpected error while disabling SIM PIN.";
+    } finally {
+      this.isSimUnlocking = false;
+    }
+  },
+
+
+  /**
+   * Check if SIM unlock prompt should be shown (first time in session)
+   * Only shows if SIM is locked and hasn't been dismissed this session
+   */
+  checkSimUnlockPrompt() {
+    if (sessionStorage.getItem('simUnlockPromptDismissed')) {
+      return;
+    }
+    if (!this.isSimPinRequired()) {
+      return;
+    }
+
+    this.showSimUnlockPrompt = true;
+  },
+
+  /**
+   * Dismiss the SIM unlock prompt for this session
+   */
+  dismissSimUnlockPrompt() {
+    this.showSimUnlockPrompt = false;
+    this.simUnlockPromptDismissed = true;
+    sessionStorage.setItem('simUnlockPromptDismissed', 'true');
+  },
+
+  async unlockFromPrompt() {
+    const pin = String(this.simPin || '').trim();
+    this.simUnlockError = "";
+    this.simUnlockMessage = "";
+    if (!pin) {
+      this.simUnlockError = "Please enter the SIM PIN.";
+      return;
+    }
+    this.isSimUnlocking = true;
+    try {
+      const unlockCmd = `AT+CPIN="${pin}"`;
+      const unlockResult = await ATCommandService.execute(unlockCmd, {
+        retries: 2,
+        timeout: 10000,
+      });
+      if (!unlockResult.ok) {
+        const message = unlockResult.error ? unlockResult.error.message : "Failed to unlock the SIM.";
+        this.simUnlockError = message;
+        return;
+      }
+      const verifyResult = await ATCommandService.execute('AT+CPIN?', {
+        retries: 2,
+        timeout: 5000,
+      });
+      if (!verifyResult.ok || !verifyResult.data || !verifyResult.data.includes('READY')) {
+        this.simUnlockError = "SIM PIN accepted but SIM is not ready.";
+        return;
+      }
+      this.simUnlockMessage = "SIM unlocked successfully!";
+      this.simStatus = "Active";
+      this.simPin = "";
+      this.showSimUnlockPrompt = false;
+      this.simPinHasBeenUnlocked = true;  // Mark that SIM has been unlocked
+      setTimeout(() => { this.fetchAllInfo(); }, 1000);
     } catch (error) {
       this.simUnlockError = error.message || "Unexpected error while unlocking SIM.";
     } finally {
