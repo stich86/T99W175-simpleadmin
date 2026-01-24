@@ -218,7 +218,7 @@ return {
 
     this.isLoading = true;
     const atcmd =
-      'AT+CSMS=1;+CSDH=0;+CNMI=2,1,0,0,0;+CMGF=1;+CSCA?;+CSMP=17,167,0,8;+CSCS="UCS2";+CMGL="ALL"';
+      'AT+CSMS=1;+CSDH=0;+CNMI=2,1,0,0,0;+CMGF=1;+CSCA?;+CSMP=17,167,0,8;+CMGL="ALL"';
 
     try {
       // Query storage info separately (unless already done)
