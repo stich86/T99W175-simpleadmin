@@ -63,11 +63,13 @@
     <script src="js/generate-freq-box.js"></script>
     <script src="js/populate-checkbox.js"></script>
     <script src="js/parse-settings.js"></script>
+    <script src="js/modem-logic.js"></script>
     <script src="js/atcommand-utils.js"></script>
     <script src="js/reboot-utils.js" defer></script>
     <script src="js/device-info.js"></script>
     <script src="js/dark-mode.js" defer></script>
     <script src="js/app-version.js" defer></script>
+    <script src="js/compat-nav.js" defer></script>
   </head>
   <body data-require-auth="true">
     <main>
@@ -445,7 +447,7 @@
                           type="radio"
                           name="simSelection"
                           id="sim1Option"
-                          value="0"
+                          value="1"
                           x-model="pendingSimSlot"
                           data-requires-admin
                         />
@@ -460,7 +462,7 @@
                           type="radio"
                           name="simSelection"
                           id="sim2Option"
-                          value="1"
+                          value="2"
                           x-model="pendingSimSlot"
                           data-requires-admin
                         />
@@ -512,7 +514,7 @@
             </div>
           </div>
 
-          <div class="col-12 col-lg-3">
+          <div class="col-12 col-lg-3 d-none">
             <div class="card h-100">
               <div class="card-header">Preferred Network</div>
               <div class="card-body">
@@ -570,7 +572,7 @@
             </div>
           </div>
 
-        <div class="col-12 col-lg-4">
+        <div class="col-12 col-lg-4 d-none">
           <div class="card h-100">
             <div class="card-header">Cell Locking</div>
             <div class="card-body">
@@ -866,7 +868,7 @@
     </main>
 
     <!-- Device Info Modal -->
-  <div class="modal fade" id="deviceInfoModal" tabindex="-1" aria-labelledby="deviceInfoModalLabel" aria-hidden="true" x-data="fetchDeviceInfo()">
+  <div class="modal fade" id="deviceInfoModal" tabindex="-1" aria-labelledby="deviceInfoModalLabel" aria-hidden="true" x-data="fetchDeviceInfo()" x-init="fetchATCommand(); fetchlanIp()">
     <div class="modal-dialog modal-dialog-centered modal-lg">
       <div class="modal-content">
         <div class="modal-header">

@@ -1,5 +1,5 @@
 /**
- * Radio and cellular settings management for T99W175 modem.
+ * Radio and cellular settings management for the modem web UI.
  *
  * Provides Alpine.js component for managing radio/cellular settings:
  * - Band selection and locking (LTE/NSA/SA)
@@ -24,6 +24,19 @@
  *
  * @returns {Object} Alpine.js component data object
  */
+const QNWPREFCFG_AVAILABLE_BANDS = {
+  LTE: [
+    1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 18, 19, 20, 25, 26, 28, 29, 30, 32,
+    34, 38, 39, 40, 41, 42, 43, 46, 48, 66, 71,
+  ],
+  NSA: [
+    1, 2, 3, 5, 7, 8, 12, 20, 25, 28, 38, 40, 41, 48, 66, 71, 77, 78, 79,
+  ],
+  SA: [
+    1, 2, 3, 5, 7, 8, 12, 20, 25, 28, 38, 40, 41, 48, 66, 71, 77, 78, 79,
+  ],
+};
+
 function cellLocking() {
   return {
     // Loading state for radio operations
@@ -132,6 +145,10 @@ function cellLocking() {
     bandLockTimeout: null,
     // Previous locked bands for comparison
     previousLockedBands: [],
+    // Band lock backend (qnwprefcfg only on this modem)
+    bandLockBackend: "qnwprefcfg",
+    // Read-only mode for band lock (no writes yet)
+    bandLockReadOnly: true,
     // All available bands by mode
     allAvailableBands: {
       LTE: [],
@@ -251,29 +268,23 @@ function cellLocking() {
       return mapping[value] || null;
     },
     mapSimDisplayToCommandValue(value) {
-      if (value === "1") {
-        return "0";
-      }
-      if (value === "2") {
+      if (value === "1" || value === 1) {
         return "1";
+      }
+      if (value === "2" || value === 2) {
+        return "2";
       }
       return null;
     },
     isValidSimCommandValue(value) {
-      return value === "0" || value === "1";
+      return value === "1" || value === "2";
     },
     canApplySimSelection() {
       if (!this.isValidSimCommandValue(this.pendingSimSlot)) {
         return false;
       }
 
-      const current = this.mapSimDisplayToCommandValue(this.sim);
-
-      if (current === null) {
-        return true;
-      }
-
-      return current !== this.pendingSimSlot;
+      return this.sim !== this.pendingSimSlot;
     },
     formatActiveSimLabel() {
       if (this.sim === "1") {
@@ -295,13 +306,13 @@ function cellLocking() {
         providerBands.checked = isChecked;
       }
 
-      const atcmd = 'AT^BAND_PREF_EXT?';
       this.isGettingBands = true;
 
       try {
-        const result = await this.sendATcommand(atcmd);
+        const quectelCmd = 'AT+QNWPREFCFG="lte_band";AT+QNWPREFCFG="nsa_nr5g_band";AT+QNWPREFCFG="nr5g_band"';
+        const quectelResult = await this.sendATcommand(quectelCmd);
 
-        if (!result.ok || !result.data) {
+        if (!quectelResult.ok || !quectelResult.data) {
           console.warn(
             "Unable to fetch supported bands:",
             this.lastErrorMessage
@@ -310,71 +321,36 @@ function cellLocking() {
           return;
         }
 
-        this.rawdata = result.data;
-        this.parseSupportedBands(result.data);
+        this.rawdata = quectelResult.data;
+        const parsed = this.parseQnwprefcfgBands(quectelResult.data);
+        if (!parsed) {
+          console.warn("Unable to parse QNWPREFCFG bands.");
+          this.bands = "Bands not available";
+          return;
+        }
 
-        await this.getLockedBands();
-      } finally {
-        this.isGettingBands = false;
-      }
-    },
+        this.bandLockBackend = "qnwprefcfg";
+        this.bandLockReadOnly = true;
 
-    parseSupportedBands(rawdata) {
-      const data = rawdata;
-      const regex = /(WCDMA|LTE|NR5G_NSA|NR5G_SA),\s*(Enable|Disable) Bands\s*:(.*)/g;
+        const availableLte = [...QNWPREFCFG_AVAILABLE_BANDS.LTE];
+        const availableNsa = [...QNWPREFCFG_AVAILABLE_BANDS.NSA];
+        const availableSa = [...QNWPREFCFG_AVAILABLE_BANDS.SA];
 
-      const bands = {
-        lte_band: [],
-        nsa_nr5g_band: [],
-        nr5g_band: [],
-      };
+        const filterActive = (list, available) =>
+          list.filter((band) => available.includes(band));
 
-      let match;
-      while ((match = regex.exec(data)) !== null) {
-        const mode = match[1];
-        const numbers = match[3]
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .map(Number)
-          .filter((value) => !Number.isNaN(value));
+        this.lte_bands = availableLte.join(":");
+        this.nsa_bands = availableNsa.join(":");
+        this.sa_bands = availableSa.join(":");
 
-        if (mode === "LTE") bands.lte_band.push(...numbers);
-        if (mode === "NR5G_NSA") bands.nsa_nr5g_band.push(...numbers);
-        if (mode === "NR5G_SA") bands.nr5g_band.push(...numbers);
-      }
+        this.locked_lte_bands = filterActive(parsed.lte, availableLte).join(":");
+        this.locked_nsa_bands = filterActive(parsed.nsa, availableNsa).join(":");
+        this.locked_sa_bands = filterActive(parsed.sa, availableSa).join(":");
 
-      const uniqSort = (arr) => [...new Set(arr)].sort((a, b) => a - b);
+        this.allAvailableBands.LTE = availableLte;
+        this.allAvailableBands.NSA = availableNsa;
+        this.allAvailableBands.SA = availableSa;
 
-      this.lte_bands = uniqSort(bands.lte_band).join(":");
-      this.nsa_bands = uniqSort(bands.nsa_nr5g_band).join(":");
-      this.sa_bands = uniqSort(bands.nr5g_band).join(":");
-
-      populateCheckboxes(
-        this.lte_bands,
-        this.nsa_bands,
-        this.sa_bands,
-        this.locked_lte_bands,
-        this.locked_nsa_bands,
-        this.locked_sa_bands,
-        this
-      );
-    },
-
-    async getLockedBands() {
-      const atcmd =
-        'AT^BAND_PREF_EXT?';
-
-      const result = await this.sendATcommand(atcmd);
-
-      if (!result.ok || !result.data) {
-        console.warn(
-          "Unable to retrieve locked bands:",
-          this.lastErrorMessage
-        );
-        this.locked_lte_bands = "";
-        this.locked_nsa_bands = "";
-        this.locked_sa_bands = "";
         populateCheckboxes(
           this.lte_bands,
           this.nsa_bands,
@@ -384,62 +360,63 @@ function cellLocking() {
           this.locked_sa_bands,
           this
         );
-        return;
+
+      } finally {
+        this.isGettingBands = false;
       }
-
-      this.rawdata = result.data;
-      this.parseLockedBands(result.data);
-
-      this.getCurrentSettings();
     },
 
-    parseLockedBands(rawdata) {
-      const data = rawdata;
-      const regex = /(LTE|NR5G_NSA|NR5G_SA),\s*Enable Bands\s*:(.*)/g;
+    parseQnwprefcfgBands(rawdata) {
+      const lines = String(rawdata || "")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line);
 
       const bands = {
-        lte_band: [],
-        nsa_nr5g_band: [],
-        nr5g_band: [],
+        lte: [],
+        nsa: [],
+        sa: [],
       };
 
-      let match;
-      while ((match = regex.exec(data)) !== null) {
-        const mode = match[1];
-        const numbers = match[2]
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .map(Number)
-          .filter((value) => !Number.isNaN(value));
+      for (const line of lines) {
+        const match = line.match(/\+QNWPREFCFG:\s*\"(lte_band|nsa_nr5g_band|nr5g_band)\"\s*,\s*(.*)$/i);
+        if (!match) {
+          continue;
+        }
+        const type = match[1].toLowerCase();
+        const listRaw = (match[2] || "").replace(/"/g, "").trim();
+        const numbers = listRaw
+          ? listRaw.split(":")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map(Number)
+            .filter((value) => !Number.isNaN(value))
+          : [];
 
-        switch (mode) {
-          case "LTE":
-            bands.lte_band = numbers;
-            break;
-          case "NR5G_NSA":
-            bands.nsa_nr5g_band = numbers;
-            break;
-          case "NR5G_SA":
-            bands.nr5g_band = numbers;
-            break;
+        if (type === "lte_band") {
+          bands.lte = numbers;
+        }
+        if (type === "nsa_nr5g_band") {
+          bands.nsa = numbers;
+        }
+        if (type === "nr5g_band") {
+          bands.sa = numbers;
         }
       }
 
-      this.locked_lte_bands = bands.lte_band.join(":");
-      this.locked_nsa_bands = bands.nsa_nr5g_band.join(":");
-      this.locked_sa_bands = bands.nr5g_band.join(":");
+      if (bands.lte.length === 0 && bands.nsa.length === 0 && bands.sa.length === 0) {
+        return null;
+      }
 
-      populateCheckboxes(
-        this.lte_bands,
-        this.nsa_bands,
-        this.sa_bands,
-        this.locked_lte_bands,
-        this.locked_nsa_bands,
-        this.locked_sa_bands,
-        this
-      );
+      const uniqSort = (arr) => [...new Set(arr)].sort((a, b) => a - b);
+
+      return {
+        lte: uniqSort(bands.lte),
+        nsa: uniqSort(bands.nsa),
+        sa: uniqSort(bands.sa),
+      };
     },
+
     init() {
       console.log("=== init() called ===");
       const self = this;
@@ -510,6 +487,24 @@ function cellLocking() {
 
       this.trackCheckboxChanges = (event) => {
         console.log(">>> trackCheckboxChanges triggered <<<");
+        if (self.bandLockReadOnly) {
+          console.log("Band locking is read-only; ignoring changes");
+          self.showToastNotification(
+            "Band locking is read-only on this modem.",
+            "info",
+            true
+          );
+          populateCheckboxes(
+            self.lte_bands,
+            self.nsa_bands,
+            self.sa_bands,
+            self.locked_lte_bands,
+            self.locked_nsa_bands,
+            self.locked_sa_bands,
+            self
+          );
+          return;
+        }
 
         const modeDropdown = document.getElementById("networkModeBand");
         const selectedMode = modeDropdown ? modeDropdown.value : null;
@@ -616,23 +611,84 @@ function cellLocking() {
       showPopulateCheckboxes();
       addNetworkModeListener();
       addProviderBandsListener();
+      this.fetchApnInfo();
       console.log("=== init() completed ===");
+    },
+
+    parseApnInfo(rawdata) {
+      if (typeof rawdata !== "string") {
+        return { apn: null, apnIP: null };
+      }
+
+      const lines = rawdata
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      const findPrimaryLine = (prefix) => {
+        const upperPrefix = `+${prefix.toUpperCase()}`;
+        const primary = lines.find((line) =>
+          line.toUpperCase().startsWith(`${upperPrefix}: 1`)
+        );
+        return primary || lines.find((line) =>
+          line.toUpperCase().startsWith(`${upperPrefix}:`)
+        );
+      };
+
+      let apn = null;
+      const apnLine = findPrimaryLine("CGCONTRDP");
+      if (apnLine) {
+        const parts = apnLine.split(",");
+        if (parts.length >= 3) {
+          apn = parts[2].replace(/"/g, "").trim();
+        }
+      }
+
+      let apnIP = null;
+      const apnIpLine = findPrimaryLine("CGDCONT");
+      if (apnIpLine) {
+        const parts = apnIpLine.split(",");
+        if (parts.length >= 2) {
+          apnIP = parts[1].replace(/"/g, "").trim();
+        }
+      }
+
+      return { apn, apnIP };
+    },
+
+    async fetchApnInfo() {
+      const apnResult = await this.sendATcommand(
+        "AT+CGCONTRDP=1;AT+CGDCONT?"
+      );
+
+      if (!apnResult.data) {
+        console.warn("Unable to fetch APN info:", this.lastErrorMessage);
+        return;
+      }
+
+      const apnInfo = this.parseApnInfo(apnResult.data);
+      if (apnInfo.apn) {
+        this.apn = apnInfo.apn;
+      }
+      if (apnInfo.apnIP) {
+        this.apnIP = apnInfo.apnIP;
+      }
     },
 
     async getCurrentSettings() {
       console.log("=== getCurrentSettings START ===");
        
       // Always get the slot info and network mode, regardless of SIM status
-      const basicCmd = 'AT^SWITCH_SLOT?;^SLMODE?';
+      const basicCmd = 'AT+QUIMSLOT?;AT^SLMODE?';
       const basicResult = await this.sendATcommand(basicCmd);
 
       if (basicResult.ok && basicResult.data) {       
-        // Parse slot: "SIM1 ENABLE" or "SIM2 ENABLE"
-        const slotMatch = basicResult.data.match(/SIM(\d+)\s+ENABLE/i);
+        // Parse slot: +QUIMSLOT: 1
+        const slotMatch = basicResult.data.match(/\+QUIMSLOT:\s*(\d+)/i);
         if (slotMatch) {
           this.sim = slotMatch[1];
-          this.pendingSimSlot = this.mapSimDisplayToCommandValue(this.sim);
-          // console.log("Parsed SIM slot:", this.sim, "Mapped to command value:", this.pendingSimSlot);
+          this.pendingSimSlot = this.sim;
+          // console.log("Parsed SIM slot:", this.sim);
         }
         
         // Parse network mode: "^SLMODE:1,0"
@@ -676,15 +732,20 @@ function cellLocking() {
         return;
       }
 
+      await this.fetchApnInfo();
+
       // SIM is ready, execute full command set
       const atcmd =
-        'AT+CGCONTRDP=1;+CGDCONT?;^BAND_PREF_EXT?;^CA_INFO?;^SLMODE?;^LTE_LOCK?;^NR5G_LOCK?';
+        'AT^CA_INFO?;AT^SLMODE?;AT^LTE_LOCK?;AT^NR5G_LOCK?';
 
       const result = await this.sendATcommand(atcmd);
 
-      if (!result.ok || !result.data) {
+      if (!result.data) {
         console.warn("Unable to fetch current settings:", this.lastErrorMessage);
         return;
+      }
+      if (!result.ok) {
+        console.warn("Partial settings data received:", this.lastErrorMessage);
       }
 
       try {
@@ -696,8 +757,12 @@ function cellLocking() {
           }
 
           // Don't override sim value - we already got it from SWITCH_SLOT
-          this.apn = settings.apn;
-          this.apnIP = settings.apnIP;
+          if (settings.apn && settings.apn !== "Failed fetching APN") {
+            this.apn = settings.apn;
+          }
+          if (settings.apnIP && settings.apnIP !== "-") {
+            this.apnIP = settings.apnIP;
+          }
           this.cellLockStatus = settings.cellLockStatus;
           this.prefNetwork = settings.prefNetwork;
           this.prefNetworkValue = settings.prefNetworkValue;
@@ -792,9 +857,12 @@ function cellLocking() {
         alert(result.message || `eSIM manager ${actionText}d successfully`);
         
         // Update eSIM nav item visibility
-        const esimNavItem = document.getElementById('esimNavItem');
-        if (esimNavItem) {
-          esimNavItem.style.display = targetState === 1 ? 'block' : 'none';
+        const esimMenuItem = document.getElementById('esimMenuItem');
+        if (esimMenuItem) {
+          esimMenuItem.style.display = targetState === 1 ? 'list-item' : 'none';
+        }
+        if (typeof updateConfigMenuDivider === "function") {
+          updateConfigMenuDivider();
         }
         
       } catch (error) {
@@ -926,6 +994,14 @@ function cellLocking() {
     },
     uncheckAllBands() {
       console.log("=== uncheckAllBands called ===");
+      if (this.bandLockReadOnly) {
+        this.showToastNotification(
+          "Band locking is read-only on this modem.",
+          "info",
+          true
+        );
+        return;
+      }
 
       const checkboxes = document.querySelectorAll('#checkboxForm input[type="checkbox"]');
       const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
@@ -969,6 +1045,14 @@ function cellLocking() {
     },
     async lockSelectedBandsAuto() {
       console.log("=== lockSelectedBandsAuto called ===");
+      if (this.bandLockReadOnly) {
+        this.showToastNotification(
+          "Band locking is read-only on this modem.",
+          "info",
+          true
+        );
+        return;
+      }
       console.log("currentNetworkMode:", this.currentNetworkMode);
       console.log("updatedLockedBands:", this.updatedLockedBands);
 
@@ -1056,7 +1140,7 @@ function cellLocking() {
       this.showModalSim = true;
 
       const result = await this.sendATcommand(
-        `AT^SWITCH_SLOT=${targetSlot}`
+        `AT+QUIMSLOT=${targetSlot}`
       );
 
       if (!result.ok) {
@@ -1534,7 +1618,47 @@ function cellLocking() {
     },    
     async resetBandLocking() {
       console.log("=== resetBandLocking called ===");
-      const atcmd = 'AT^BAND_PREF_EXT';
+      if (this.bandLockBackend !== "qnwprefcfg") {
+        alert("Band reset is not supported on this modem.");
+        return;
+      }
+
+      const availableLte =
+        this.allAvailableBands.LTE && this.allAvailableBands.LTE.length
+          ? this.allAvailableBands.LTE
+          : QNWPREFCFG_AVAILABLE_BANDS.LTE;
+      const availableNsa =
+        this.allAvailableBands.NSA && this.allAvailableBands.NSA.length
+          ? this.allAvailableBands.NSA
+          : QNWPREFCFG_AVAILABLE_BANDS.NSA;
+      const availableSa =
+        this.allAvailableBands.SA && this.allAvailableBands.SA.length
+          ? this.allAvailableBands.SA
+          : QNWPREFCFG_AVAILABLE_BANDS.SA;
+
+      const commands = [];
+      if (availableLte.length) {
+        commands.push(
+          `AT+QNWPREFCFG="lte_band",${availableLte.join(":")}`
+        );
+      }
+      if (availableNsa.length) {
+        commands.push(
+          `AT+QNWPREFCFG="nsa_nr5g_band",${availableNsa.join(":")}`
+        );
+      }
+      if (availableSa.length) {
+        commands.push(
+          `AT+QNWPREFCFG="nr5g_band",${availableSa.join(":")}`
+        );
+      }
+
+      if (commands.length === 0) {
+        alert("No available bands to reset.");
+        return;
+      }
+
+      const atcmd = commands.join(";");
 
       // Initialize countdown BEFORE showing modal to avoid flash
       this.countdown = 3;

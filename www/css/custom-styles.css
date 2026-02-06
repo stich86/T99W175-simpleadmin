@@ -2082,3 +2082,7 @@ html[data-bs-theme="dark"] .modern-confirm-warning {
   font-weight: 500;
   border-radius: 8px;
 }
+/* SMS page disabled: hide nav item */
+a.nav-link[href="/sms.html"] {
+  display: none !important;
+}
