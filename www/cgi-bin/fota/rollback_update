@@ -1,0 +1,151 @@
+#!/bin/bash
+
+# SimpleAdmin Update System - Rollback Update
+# Restores the previous version from backup
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source session utilities
+if [ -f "$SCRIPT_DIR/../session_utils.sh" ]; then
+    . "$SCRIPT_DIR/../session_utils.sh"
+else
+    send_json_response 500 '{"ok": false, "message": "session_utils.sh not found"}'
+    exit 1
+fi
+
+# Validate session and require admin
+if ! session_load; then
+    send_json_response 401 '{"ok": false, "message": "Invalid or expired session"}'
+    exit 1
+fi
+
+if ! session_require_role "admin"; then
+    send_json_response 403 '{"ok": false, "message": "Admin privileges required"}'
+    exit 1
+fi
+
+# Configuration
+STATE_DIR="/data/simpleadmin"
+STATE_FILE="${STATE_DIR}/update-state.json"
+BACKUP_DIR="${STATE_DIR}/backups"
+ROLLBACK_TMP_DIR="${STATE_DIR}/rollback_tmp"
+WWW_DIR="/WEBSERVER/www"
+
+# Helper functions
+send_fota_response() {
+    local ok=$1
+    local message=$2
+    local data=$3
+
+    local payload
+    payload="{\"ok\": $ok, \"message\": \"$message\", \"data\": $data}"
+
+    send_json_response 200 "$payload"
+}
+
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
+}
+
+log_info() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1" >&2
+}
+
+# Restore from backup
+restore_backup() {
+    local backup_file=$1
+
+    log_info "Restoring from backup: $backup_file"
+
+    # Verify backup exists
+    if [ ! -f "$backup_file" ]; then
+        log_error "Backup file not found: $backup_file"
+        return 1
+    fi
+
+    # Verify backup is valid tar.gz
+    if ! tar -tzf "$backup_file" > /dev/null 2>&1; then
+        log_error "Backup file is corrupted"
+        return 1
+    fi
+
+    # Clean and create temp directory
+    rm -rf "${ROLLBACK_TMP_DIR:?}"/*
+    mkdir -p "$ROLLBACK_TMP_DIR"
+
+    # Extract backup to temp directory
+    log_info "Extracting backup to temporary directory..."
+    if ! tar xzf "$backup_file" -C "$ROLLBACK_TMP_DIR" 2>/dev/null; then
+        log_error "Failed to extract backup"
+        return 1
+    fi
+
+    # Verify extracted www directory exists
+    if [ ! -d "$ROLLBACK_TMP_DIR/www" ]; then
+        log_error "Backup does not contain www directory"
+        return 1
+    fi
+
+    # Move current www to failed backup (atomic)
+    log_info "Moving current www directory to backup..."
+    if ! mv "$WWW_DIR" "${WWW_DIR}.failed"; then
+        log_error "Failed to move current www directory"
+        return 1
+    fi
+
+    # Move restored www into place (atomic)
+    log_info "Moving restored www into place..."
+    if ! mv "$ROLLBACK_TMP_DIR/www" "$WWW_DIR"; then
+        log_error "Failed to move restored directory"
+        # Try to restore failed directory
+        mv "${WWW_DIR}.failed" "$WWW_DIR"
+        systemctl restart qcmap_httpd 2>/dev/null
+        return 1
+    fi
+
+    # Set permissions
+    chmod -R 755 "$WWW_DIR"
+    chmod +x "$WWW_DIR"/cgi-bin/* 2>/dev/null
+
+    # Start web server
+    log_info "Restarting web server..."
+    systemctl restart qcmap_httpd
+
+    # Wait for server to start
+    sleep 2
+
+    # Cleanup failed directory in background
+    log_info "Cleaning up failed www directory..."
+    rm -rf "${WWW_DIR}.failed" 2>/dev/null &
+
+    # Cleanup temp directory
+    rm -rf "${ROLLBACK_TMP_DIR}" 2>/dev/null &
+
+    log_info "Rollback completed successfully"
+    return 0
+}
+
+# Main execution
+main() {
+    # Use fixed backup path
+    local backup_file="${BACKUP_DIR}/www_previous.tar.gz"
+
+    # Check if backup exists
+    if [ ! -f "$backup_file" ]; then
+        log_error "Backup file not found: $backup_file"
+        send_fota_response "false" "Backup file missing" "{}"
+        exit 1
+    fi
+
+    # Perform rollback
+    if ! restore_backup "$backup_file"; then
+        send_fota_response "false" "Failed to restore backup" "{}"
+        exit 1
+    fi
+
+    log_info "Rollback successful"
+    send_fota_response "true" "Rollback completed successfully" "{\"backup\": \"$backup_file\"}"
+}
+
+# Execute main function
+main

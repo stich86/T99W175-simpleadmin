@@ -65,6 +65,7 @@
     <script src="js/device-info.js"></script>
     <script src="js/dark-mode.js" defer></script>
     <script src="js/app-version.js" defer></script>
+    <script src="js/fota.js"></script>
   </head>
   <body data-require-auth="true">
     <main>
@@ -320,7 +321,7 @@
                       <tbody>
                         <tr>
                           <th scope="row">Reset to Factory Defaults</th>
-                          <td>
+                          <td class="text-end">
                             <button
                               type="submit"
                               class="btn btn-danger"
@@ -341,8 +342,91 @@
           </div>
         </div>
 
+        <!-- Web UI Update Section -->
+        <div class="row mt-4">
+          <div class="col">
+            <div class="card" data-requires-admin x-data="fotaManager()">
+              <div class="card-header d-flex justify-content-between align-items-center py-3 border-bottom">
+                <strong>Web UI Update</strong>
+                <span class="badge rounded-1"
+                      :class="updateChannel === 'stable' ? 'bg-success' : 'bg-warning text-dark'"
+                      style="font-size: 0.8rem; cursor: pointer; padding: 0.4em 0.8em;"
+                      @click="updateChannel = updateChannel === 'stable' ? 'beta' : 'stable'; changeChannel();"
+                      x-text="'Channel: ' + (updateChannel === 'stable' ? 'Stable' : 'Beta')">
+                </span>
+              </div>
+              <div class="card-body py-2">
+
+                <!-- Versions Row -->
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <small class="text-muted d-block" style="font-size: 0.7rem;">Current</small>
+                    <div class="fw-bold text-primary" style="font-size: 0.9rem;" x-text="currentVersion || '-'">-</div>
+                  </div>
+                  <div class="col-6">
+                    <small class="text-muted d-block" style="font-size: 0.7rem;">New</small>
+                    <div class="fw-bold" style="font-size: 0.9rem;" x-text="latestVersion || 'Not checked'">-</div>
+                  </div>
+                </div>
+
+                <!-- Changelog -->
+                <div class="mb-2" x-show="changelog && changelog !== ''" x-cloak>
+                  <div class="card bg-light" style="max-height: 80px; overflow-y: auto;">
+                    <div class="card-body small p-2" style="white-space: pre-wrap; font-size: 0.75rem;" x-text="changelog"></div>
+                  </div>
+                </div>
+
+                <!-- Actions Row -->
+                <div class="row g-2 align-items-center border-top pt-2 mt-2">
+
+                  <!-- Status -->
+                  <div class="col-auto">
+                    <small class="text-muted" x-show="statusMessage && !isLoading" x-text="statusMessage"></small>
+                  </div>
+
+                  <!-- Rollback Button (when backup available) -->
+                  <div class="col-auto" x-show="hasBackup">
+                    <button class="btn btn-outline-danger btn-sm" type="button" @click="rollbackUpdate()" :disabled="isLoading">
+                      <span x-show="!isLoading">Rollback</span>
+                      <span x-show="isLoading">Rolling back...</span>
+                    </button>
+                  </div>
+
+                  <!-- Check/Download/Install Button -->
+                  <div class="col-auto ms-auto">
+                    <!-- Install button (when downloaded) -->
+                    <template x-if="updateDownloaded">
+                      <button class="btn btn-success" type="button" @click="applyUpdate()" :disabled="isLoading">
+                        Install Update
+                      </button>
+                    </template>
+
+                    <!-- Download button (when update available but not downloaded) -->
+                    <template x-if="!updateDownloaded && updateAvailable">
+                      <button class="btn btn-warning text-dark" type="button" @click="downloadUpdate()" :disabled="isLoading">
+                        <span x-show="!isLoading">Download Update</span>
+                        <span x-show="isLoading">Downloading...</span>
+                      </button>
+                    </template>
+
+                    <!-- Check button (default state) -->
+                    <template x-if="!updateDownloaded && !updateAvailable">
+                      <button class="btn btn-primary" type="button" @click="checkUpdates()" :disabled="isLoading">
+                        <span x-show="!isLoading">Check for Update</span>
+                        <span x-show="isLoading">Checking...</span>
+                      </button>
+                    </template>
+                  </div>
+
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Loading Modal for Reboot -->
-        <div class="modal-overlay" x-show="showModal">
+        <div class="modal-overlay" x-show="showModal" x-cloak>
           <div class="loading-modal">
             <div
               class="loading-text"
@@ -371,7 +455,7 @@
         </div>
 
         <!-- Reboot Modal Countdown -->
-        <div class="modal-overlay" x-show="isRebooting">
+        <div class="modal-overlay" x-show="isRebooting" x-cloak>
           <div class="loading-modal">
             <div class="loader"></div>
             <div
@@ -389,7 +473,7 @@
         </div>
 
         <!-- Factory Reset Confirmation Modal -->
-        <div class="modal-overlay" x-show="showFactoryResetModal">
+        <div class="modal-overlay" x-show="showFactoryResetModal" x-cloak>
           <div class="loading-modal" style="max-width: 600px">
             <div
               class="loading-text"
@@ -427,7 +511,7 @@
         </div>
 
         <!-- Factory Reset Progress Modal -->
-        <div class="modal-overlay" x-show="isFactoryResetting">
+        <div class="modal-overlay" x-show="isFactoryResetting" x-cloak>
           <div class="loading-modal">
             <div class="loader"></div>
             <div
@@ -720,6 +804,31 @@
             Reboot
           </button>
           <button class="btn btn-danger" type="button" id="globalRebootCancel">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOTA Update Modal Countdown -->
+    <div class="modal-overlay" x-show="showFotaModal" x-cloak>
+      <div class="loading-modal">
+        <div class="loader" x-show="fotaCountdown > 0"></div>
+        <div class="loading-text" style="display: flex; flex-direction: column">
+          <h3 x-text="fotaModalTitle">Updating...</h3>
+          <p style="margin-top: 0.5rem">
+            <span x-text="fotaModalMessage">Please wait...</span>
+            <span x-show="fotaCountdown > 0" style="font-weight:500"> Refresh in </span>
+            <span x-show="fotaCountdown > 0" x-text="fotaCountdown" style="font-weight:500"></span>
+            <span x-show="fotaCountdown > 0" style="font-weight:500"> seconds...</span>
+          </p>
+        </div>
+        <!-- Confirmation buttons (only show when countdown is 0) -->
+        <div class="d-grid gap-2 d-md-block mt-3" x-show="fotaCountdown === 0">
+          <button class="btn btn-primary" type="button" @click="confirmFotaAction()">
+            Continue
+          </button>
+          <button class="btn btn-secondary" type="button" @click="closeFotaModal()">
             Cancel
           </button>
         </div>

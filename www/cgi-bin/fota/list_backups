@@ -1,0 +1,99 @@
+#!/bin/bash
+
+# SimpleAdmin FOTA System - List Backups
+# Returns list of available backup files
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source session utilities
+if [ -f "$SCRIPT_DIR/../session_utils.sh" ]; then
+    . "$SCRIPT_DIR/../session_utils.sh"
+else
+    send_json_response 500 '{"ok": false, "message": "session_utils.sh not found"}'
+    exit 1
+fi
+
+# Validate session and require admin
+if ! session_load; then
+    send_json_response 401 '{"ok": false, "message": "Invalid or expired session"}'
+    exit 1
+fi
+
+if ! session_require_role "admin"; then
+    send_json_response 403 '{"ok": false, "message": "Admin privileges required"}'
+    exit 1
+fi
+
+# Configuration
+STATE_DIR="/data/simpleadmin"
+BACKUP_DIR="${STATE_DIR}/backups"
+
+# Helper functions
+send_fota_response() {
+    local ok=$1
+    local message=$2
+    local data=$3
+
+    local payload
+    payload="{\"ok\": $ok, \"message\": \"$message\", \"data\": $data}"
+
+    send_json_response 200 "$payload"
+}
+
+# Get file info in JSON format
+get_file_info() {
+    local file=$1
+
+    if [ ! -f "$file" ]; then
+        echo "{}"
+        return
+    fi
+
+    local filename
+    filename=$(basename "$file")
+
+    local size
+    size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
+
+    local size_mb=$((size / 1024 / 1024))
+
+    local mtime
+    mtime=$(stat -c%Y "$file" 2>/dev/null || stat -f%m "$file" 2>/dev/null)
+
+    local date_str
+    date_str=$(date -d "@$mtime" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || date -r "$file" "+%Y-%m-%d %H:%M:%S" 2>/dev/null)
+
+    cat <<EOF
+{
+  "filename": "$filename",
+  "path": "$file",
+  "size_mb": $size_mb,
+  "modified": "$date_str",
+  "timestamp": $mtime
+}
+EOF
+}
+
+# Main execution
+main() {
+    if [ ! -d "$BACKUP_DIR" ]; then
+        send_fota_response "true" "No backups found" "[]"
+        exit 0
+    fi
+
+    # Check for single backup file
+    local backup_file="${BACKUP_DIR}/www_previous.tar.gz"
+
+    if [ ! -f "$backup_file" ]; then
+        send_fota_response "true" "No backups found" "[]"
+        exit 0
+    fi
+
+    # Return single backup info
+    echo "["
+    get_file_info "$backup_file"
+    echo "]"
+}
+
+# Execute main function
+main

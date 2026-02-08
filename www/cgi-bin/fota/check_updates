@@ -1,0 +1,311 @@
+#!/bin/bash
+
+# SimpleAdmin Update System - Check for Updates
+# Checks GitHub Releases API for new versions
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+JQ_BIN="/usr/bin/jq"
+
+# Source session utilities
+if [ -f "$SCRIPT_DIR/../session_utils.sh" ]; then
+    . "$SCRIPT_DIR/../session_utils.sh"
+else
+    send_json_response 500 '{"ok": false, "message": "session_utils.sh not found"}'
+    exit 1
+fi
+
+# Configuration
+GITHUB_REPO="stich86/T99W175-simpleadmin"
+STATE_DIR="/data/simpleadmin"
+STATE_FILE="${STATE_DIR}/update-state.json"
+VERSION_FILE="/WEBSERVER/www/VERSION"
+
+# Get channel from query string or state file
+get_channel() {
+    # Check QUERY_STRING for channel parameter
+    if [[ "$QUERY_STRING" =~ channel=([^&]+) ]]; then
+        local channel="${BASH_REMATCH[1]}"
+        if [[ "$channel" == "stable" || "$channel" == "beta" ]]; then
+            echo "$channel"
+            return 0
+        fi
+    fi
+
+    # Check state file for saved channel
+    if [ -f "$STATE_FILE" ]; then
+        local saved_channel
+        saved_channel=$(grep -o '"channel"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" | sed 's/.*"channel"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        if [[ -n "$saved_channel" ]]; then
+            echo "$saved_channel"
+            return 0
+        fi
+    fi
+
+    # Default to stable
+    echo "stable"
+    return 0
+}
+
+# Helper functions
+send_fota_response() {
+    local ok=$1
+    local message=$2
+    local data=$3
+
+    local payload
+    payload="{\"ok\": $ok, \"message\": \"$message\", \"data\": $data}"
+
+    send_json_response 200 "$payload"
+}
+
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
+}
+
+log_info() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1" >&2
+}
+
+# Get current version
+get_current_version() {
+    if [ -f "$VERSION_FILE" ]; then
+        cat "$VERSION_FILE" | tr -d '[:space:]'
+    else
+        echo "unknown"
+    fi
+}
+
+# Compare versions (returns 0 if $1 = $2, 1 if $1 > $2, 2 if $1 < $2)
+# BusyBox-compatible version comparison (no arrays)
+compare_versions() {
+    if [ "$1" = "$2" ]; then
+        return 0
+    fi
+
+    # Compare each part using cut
+    local i=1
+    while true; do
+        local p1=$(echo "$1" | cut -d. -f$i)
+        local p2=$(echo "$2" | cut -d. -f$i)
+
+        # If both parts are empty, versions are equal
+        if [ -z "$p1" ] && [ -z "$p2" ]; then
+            break
+        fi
+
+        # Default to 0 if empty
+        [ -z "$p1" ] && p1=0
+        [ -z "$p2" ] && p2=0
+
+        # Remove non-numeric suffixes (like -beta1)
+        p1=$(echo "$p1" | grep -o '^[0-9]*')
+        p2=$(echo "$p2" | grep -o '^[0-9]*')
+
+        [ -z "$p1" ] && p1=0
+        [ -z "$p2" ] && p2=0
+
+        if [ "$p1" -gt "$p2" ] 2>/dev/null; then
+            return 1
+        elif [ "$p1" -lt "$p2" ] 2>/dev/null; then
+            return 2
+        fi
+
+        i=$((i + 1))
+    done
+
+    return 0
+}
+
+# Fetch latest release from GitHub
+fetch_latest_release() {
+    local channel="$1"  # stable or beta
+    local api_url
+
+    if [[ "$channel" == "beta" ]]; then
+        api_url="https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=5"
+        log_info "Fetching beta releases from GitHub..."
+    else
+        api_url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+        log_info "Fetching latest stable release from GitHub..."
+    fi
+
+    local response
+    response=$(curl -k -s "$api_url" 2>&1)
+
+    if [ $? -ne 0 ]; then
+        log_error "Failed to fetch from GitHub"
+        return 1
+    fi
+
+    local latest_version
+    local download_url
+    local changelog
+
+    if [[ "$channel" == "beta" ]]; then
+        # For beta: Use jq to extract first prerelease
+        if [ ! -x "$JQ_BIN" ]; then
+            log_error "jq not found at $JQ_BIN"
+            return 1
+        fi
+
+        # Extract first prerelease using jq
+        local beta_json
+        beta_json=$(echo "$response" | "$JQ_BIN" '[.[] | select(.prerelease == true)] | .[0]' 2>/dev/null)
+
+        if [ $? -ne 0 ] || [[ "$beta_json" == "null" ]] || [[ -z "$beta_json" ]]; then
+            log_error "No beta releases found or jq failed"
+            return 1
+        fi
+
+        # Extract fields using jq
+        latest_version=$(echo "$beta_json" | "$JQ_BIN" -r '.tag_name // empty' 2>/dev/null | sed 's/^v//')
+
+        if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
+            log_error "Failed to extract tag_name from beta release"
+            return 1
+        fi
+
+        # Find tar.gz download URL from assets
+        download_url=$(echo "$beta_json" | "$JQ_BIN" -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url // empty' 2>/dev/null | head -n 1)
+
+        # Extract body/changelog
+        changelog=$(echo "$beta_json" | "$JQ_BIN" -r '.body // ""' 2>/dev/null | head -c 500)
+    else
+        # For stable: Use jq for cleaner parsing
+        if [ ! -x "$JQ_BIN" ]; then
+            log_error "jq not found at $JQ_BIN"
+            return 1
+        fi
+
+        latest_version=$(echo "$response" | "$JQ_BIN" -r '.tag_name // empty' 2>/dev/null | sed 's/^v//')
+
+        if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
+            log_error "Failed to extract tag_name from stable release"
+            return 1
+        fi
+
+        # Find tar.gz download URL from assets
+        download_url=$(echo "$response" | "$JQ_BIN" -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url // empty' 2>/dev/null | head -n 1)
+
+        # Extract body/changelog
+        changelog=$(echo "$response" | "$JQ_BIN" -r '.body // ""' 2>/dev/null | head -c 500)
+    fi
+
+    # Escape changelog for JSON
+    changelog=$(echo "$changelog" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+
+    echo "$latest_version|$download_url|$changelog"
+    return 0
+}
+
+# Update state file
+update_state() {
+    local current_version=$1
+    local latest_version=$2
+    local download_url=$3
+    local changelog=$4
+    local update_available=$5
+    local channel=$6
+
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Create state file manually
+    cat > "$STATE_FILE" <<EOF
+{
+  "channel": "$channel",
+  "current_version": "$current_version",
+  "latest_version": "$latest_version",
+  "update_available": $update_available,
+  "update_downloaded": false,
+  "backup_created": false,
+  "backup_path": "",
+  "download_path": "",
+  "status": "idle",
+  "last_check": "$timestamp",
+  "download_url": "$download_url",
+  "changelog": "$changelog",
+  "error_message": ""
+}
+EOF
+}
+
+# Main execution
+main() {
+    # CRITICAL: Check if running as CGI
+    if [ -z "${REQUEST_METHOD:-}" ] && [ -z "${GATEWAY_INTERFACE:-}" ]; then
+        send_json_response 400 '{"ok": false, "message": "This script must be run as CGI"}'
+        exit 1
+    fi
+
+    # Validate session and require admin FIRST
+    if ! session_load; then
+        send_json_response 401 '{"ok": false, "message": "Invalid or expired session"}'
+        exit 1
+    fi
+
+    if ! session_require_role "admin"; then
+        send_json_response 403 '{"ok": false, "message": "Admin privileges required"}'
+        exit 1
+    fi
+
+    # Create state directory
+    mkdir -p "$STATE_DIR"
+
+    # Get channel
+    local channel
+    channel=$(get_channel)
+    log_info "Update channel: $channel"
+
+    # Get current version
+    local current_version
+    current_version=$(get_current_version)
+
+    log_info "Current version: $current_version"
+
+    # Fetch latest release for channel
+    local release_info
+    if ! release_info=$(fetch_latest_release "$channel"); then
+        send_fota_response "false" "Failed to check for updates" "{}"
+        exit 1
+    fi
+
+    IFS='|' read -r latest_version download_url changelog <<< "$release_info"
+
+    log_info "Latest $channel version: $latest_version"
+
+    # Compare versions
+    local update_available="false"
+    local comparison
+    # Temporarily disable set -e to allow non-zero return
+    set +e
+    compare_versions "$current_version" "$latest_version"
+    comparison=$?
+    set -e
+
+    if [ $comparison -eq 2 ]; then
+        update_available="true"
+        log_info "Update available!"
+    else
+        log_info "Already up to date"
+    fi
+
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Update state with channel
+    update_state "$current_version" "$latest_version" "$download_url" "$changelog" "$update_available" "$channel"
+
+    # Send response - read from state file
+    local message
+    if [ "$update_available" = "true" ]; then
+        message="New version available: $latest_version"
+    else
+        message="Already up to date"
+    fi
+
+    send_fota_response "true" "$message" "$(cat "$STATE_FILE")"
+}
+
+# Execute main function
+main

@@ -1,0 +1,178 @@
+#!/bin/bash
+
+# SimpleAdmin Update System - Download Update
+# Downloads the latest release from GitHub
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source session utilities
+if [ -f "$SCRIPT_DIR/../session_utils.sh" ]; then
+    . "$SCRIPT_DIR/../session_utils.sh"
+else
+    send_json_response 500 '{"ok": false, "message": "session_utils.sh not found"}'
+    exit 1
+fi
+
+# Validate session and require admin
+if ! session_load; then
+    send_json_response 401 '{"ok": false, "message": "Invalid or expired session"}'
+    exit 1
+fi
+
+if ! session_require_role "admin"; then
+    send_json_response 403 '{"ok": false, "message": "Admin privileges required"}'
+    exit 1
+fi
+
+# Configuration
+STATE_DIR="/data/simpleadmin"
+STATE_FILE="${STATE_DIR}/update-state.json"
+DOWNLOAD_DIR="${STATE_DIR}/downloads"
+
+# Helper functions
+send_fota_response() {
+    local ok=$1
+    local message=$2
+    local data=$3
+
+    local payload
+    payload="{\"ok\": $ok, \"message\": \"$message\", \"data\": $data}"
+
+    send_json_response 200 "$payload"
+}
+
+log_error() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
+}
+
+log_info() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1" >&2
+}
+
+# Extract field from JSON using grep/sed
+extract_json_field() {
+    local json=$1
+    local field=$2
+    echo "$json" | grep "\"$field\":" | sed 's/.*"'$field'" *: *"\([^"]*\)".*/\1/' | head -n 1
+}
+
+# Extract boolean field from JSON
+extract_json_bool() {
+    local json=$1
+    local field=$2
+    echo "$json" | grep "\"$field\":" | sed 's/.*"'$field'" *: *\([^,}]*\).*/\1/' | head -n 1
+}
+
+# Update state file (set update_downloaded=true and download_path)
+update_state_downloaded() {
+    local download_path=$1
+
+    # Use sed to update the state file
+    sed -i 's/"update_downloaded": false/"update_downloaded": true/' "$STATE_FILE"
+    sed -i "s|\"download_path\": \"\"|\"download_path\": \"$download_path\"|" "$STATE_FILE"
+    sed -i 's/"status": "idle"/"status": "downloaded"/' "$STATE_FILE"
+}
+
+# Main execution
+main() {
+    # Create directories
+    mkdir -p "$DOWNLOAD_DIR"
+
+    # Check if state file exists
+    if [ ! -f "$STATE_FILE" ]; then
+        send_fota_response "false" "Update state not found. Please check for updates first." "{}"
+        exit 1
+    fi
+
+    # Read state
+    local state_data
+    state_data=$(cat "$STATE_FILE" 2>/dev/null)
+
+    if [ -z "$state_data" ]; then
+        send_fota_response "false" "Failed to read state file" "{}"
+        exit 1
+    fi
+
+    # Extract fields using grep/sed
+    local update_available
+    update_available=$(extract_json_bool "$state_data" "update_available")
+
+    if [ "$update_available" != "true" ]; then
+        send_fota_response "false" "No update available" "{}"
+        exit 1
+    fi
+
+    local download_url
+    download_url=$(extract_json_field "$state_data" "download_url")
+
+    if [ -z "$download_url" ] || [ "$download_url" = "null" ]; then
+        send_fota_response "false" "Download URL not found in state" "{}"
+        exit 1
+    fi
+
+    local latest_version
+    latest_version=$(extract_json_field "$state_data" "latest_version")
+
+    # Check if already downloaded
+    local existing_download
+    existing_download=$(extract_json_field "$state_data" "download_path")
+
+    if [ -n "$existing_download" ] && [ "$existing_download" != "null" ] && [ -f "$existing_download" ]; then
+        local size_bytes
+        size_bytes=$(stat -c%s "$existing_download" 2>/dev/null || stat -f%z "$existing_download" 2>/dev/null)
+        local size_mb=$((size_bytes / 1024 / 1024))
+
+        send_fota_response "true" "Update already downloaded" "{\"download_path\": \"$existing_download\", \"size_mb\": $size_mb}"
+        exit 0
+    fi
+
+    # Determine filename from URL
+    local filename
+    filename=$(basename "$download_url")
+
+    if [ -z "$filename" ]; then
+        filename="simpleadmin-${latest_version}.tar.gz"
+    fi
+
+    local download_path="${DOWNLOAD_DIR}/${filename}"
+
+    # Download file
+    log_info "Downloading from: $download_url"
+    log_info "Saving to: $download_path"
+
+    if ! curl -k -L -o "$download_path" "$download_url" 2>&1; then
+        log_error "Download failed"
+        send_fota_response "false" "Failed to download update" "{}"
+        exit 1
+    fi
+
+    # Verify download
+    if [ ! -f "$download_path" ]; then
+        log_error "Downloaded file not found"
+        send_fota_response "false" "Downloaded file not found" "{}"
+        exit 1
+    fi
+
+    # Verify it's a valid tar.gz
+    if ! tar -tzf "$download_path" > /dev/null 2>&1; then
+        log_error "Downloaded file is not a valid tar.gz"
+        rm -f "$download_path"
+        send_fota_response "false" "Downloaded file is not valid" "{}"
+        exit 1
+    fi
+
+    # Get file size
+    local size_bytes
+    size_bytes=$(stat -c%s "$download_path" 2>/dev/null || stat -f%z "$download_path" 2>/dev/null)
+    local size_mb=$((size_bytes / 1024 / 1024))
+
+    log_info "Download completed: $size_mb MB"
+
+    # Update state
+    update_state_downloaded "$download_path"
+
+    send_fota_response "true" "Update downloaded successfully" "{\"download_path\": \"$download_path\", \"size_mb\": $size_mb}"
+}
+
+# Execute main function
+main
