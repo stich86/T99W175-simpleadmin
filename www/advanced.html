@@ -396,9 +396,15 @@
                   <div class="col-auto ms-auto">
                     <!-- Install button (when downloaded) -->
                     <template x-if="updateDownloaded">
-                      <button class="btn btn-success" type="button" @click="applyUpdate()" :disabled="isLoading">
-                        Install Update
-                      </button>
+                      <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearCache()" :disabled="isLoading" title="Clear cached update and re-check">
+                          <span x-show="!isLoading">Clear & Re-check</span>
+                          <span x-show="isLoading">Clearing...</span>
+                        </button>
+                        <button class="btn btn-success" type="button" @click="applyUpdate()" :disabled="isLoading">
+                          Install Update
+                        </button>
+                      </div>
                     </template>
 
                     <!-- Download button (when update available but not downloaded) -->

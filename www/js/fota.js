@@ -211,56 +211,33 @@ function fotaManager() {
       this.fotaAction = '';
     },
 
-    async rollbackUpdate() {
-      if (!this.hasBackup) {
-        this.statusMessage = 'No backup available';
-        return;
-      }
-
-      // Show confirmation modal
-      this.fotaModalTitle = 'Rollback Update';
-      this.fotaModalMessage = 'This will rollback to the previous version and refresh the interface. Continue?';
-      this.showFotaModal = true;
-      this.fotaCountdown = 0;
-    },
-
-    async confirmRollbackUpdate() {
-      this.showFotaModal = false;
+    async clearCache() {
       this.isLoading = true;
-      this.statusMessage = 'Rolling back...';
+      this.statusMessage = 'Clearing cache...';
 
       try {
-        const response = await fetch('/cgi-bin/fota/rollback_update', {
+        const response = await fetch('/cgi-bin/fota/cleanup_downloads', {
           method: 'POST'
         });
         const data = await response.json();
 
         if (data.ok) {
-          // Show success modal with countdown
-          this.fotaModalTitle = 'Rollback Complete!';
-          this.fotaModalMessage = 'The system has been rolled back to the previous version.';
-          this.showFotaModal = true;
-          this.fotaCountdown = 5;
-
-          // Start countdown
-          const countdownInterval = setInterval(() => {
-            this.fotaCountdown--;
-            if (this.fotaCountdown <= 0) {
-              clearInterval(countdownInterval);
-              // Refresh page
-              window.location.href = '/';
-            }
-          }, 1000);
+          this.statusMessage = 'Cache cleared successfully';
+          // Clear local state
+          this.updateDownloaded = false;
+          this.latestVersion = '';
+          this.updateAvailable = false;
+          this.changelog = '';
+          // Re-check for updates
+          await this.checkUpdates();
         } else {
-          this.statusMessage = 'Rollback failed: ' + data.message;
+          this.statusMessage = 'Clear cache failed: ' + data.message;
           this.isLoading = false;
-          this.showFotaModal = false;
         }
       } catch (error) {
-        console.error('[FOTA] Rollback failed:', error);
-        this.statusMessage = 'Rollback failed';
+        console.error('[FOTA] Clear cache failed:', error);
+        this.statusMessage = 'Failed to clear cache';
         this.isLoading = false;
-        this.showFotaModal = false;
       }
     },
   };

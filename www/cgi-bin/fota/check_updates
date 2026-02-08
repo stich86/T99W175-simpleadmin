@@ -145,15 +145,23 @@ fetch_latest_release() {
         # For beta: Use jq to extract first prerelease
         if [ ! -x "$JQ_BIN" ]; then
             log_error "jq not found at $JQ_BIN"
-            return 1
+            return 2
         fi
 
         # Extract first prerelease using jq
         local beta_json
         beta_json=$(echo "$response" | "$JQ_BIN" '[.[] | select(.prerelease == true)] | .[0]' 2>/dev/null)
+        local jq_exit_code=$?
 
-        if [ $? -ne 0 ] || [[ "$beta_json" == "null" ]] || [[ -z "$beta_json" ]]; then
-            log_error "No beta releases found or jq failed"
+        # Return 2 (error) if jq command failed
+        if [ $jq_exit_code -ne 0 ]; then
+            log_error "jq parsing failed"
+            return 2
+        fi
+
+        # Return 1 (no beta available) if result is null or empty
+        if [[ "$beta_json" == "null" ]] || [[ -z "$beta_json" ]]; then
+            log_info "No beta releases found"
             return 1
         fi
 
@@ -162,7 +170,7 @@ fetch_latest_release() {
 
         if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
             log_error "Failed to extract tag_name from beta release"
-            return 1
+            return 2
         fi
 
         # Find tar.gz download URL from assets
@@ -265,14 +273,31 @@ main() {
 
     # Fetch latest release for channel
     local release_info
-    if ! release_info=$(fetch_latest_release "$channel"); then
+    release_info=$(fetch_latest_release "$channel")
+    local fetch_result=$?
+
+    # Handle different fetch results
+    if [ $fetch_result -eq 2 ]; then
+        # Actual error (jq failed, timeout, etc.)
         send_fota_response "false" "Failed to check for updates" "{}"
         exit 1
+    elif [ $fetch_result -eq 1 ]; then
+        # No beta releases available (not an error)
+        if [[ "$channel" == "beta" ]]; then
+            log_info "No beta releases available"
+            # Set latest to current to show "up to date" state
+            latest_version="$current_version"
+            download_url=""
+            changelog="No beta releases available at this time."
+        else
+            send_fota_response "false" "Failed to fetch release info" "{}"
+            exit 1
+        fi
+    else
+        # Success - parse the release info
+        IFS='|' read -r latest_version download_url changelog <<< "$release_info"
+        log_info "Latest $channel version: $latest_version"
     fi
-
-    IFS='|' read -r latest_version download_url changelog <<< "$release_info"
-
-    log_info "Latest $channel version: $latest_version"
 
     # Compare versions
     local update_available="false"
