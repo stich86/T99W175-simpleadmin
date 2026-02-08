@@ -1,0 +1,41 @@
+name: Create Release Asset
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-release:
+    name: Build Release Asset
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create VERSION file
+        run: echo "${{ steps.get_version.outputs.VERSION }}" > www/VERSION
+
+      - name: Create tar.gz archive
+        run: |
+          tar czf simpleadmin-${{ steps.get_version.outputs.VERSION }}.tar.gz www/
+
+      - name: Get release info
+        id: get_release
+        run: |
+          echo "tag=${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+          echo "filename=simpleadmin-${{ steps.get_version.outputs.VERSION }}.tar.gz" >> $GITHUB_OUTPUT
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./simpleadmin-${{ steps.get_version.outputs.VERSION }}.tar.gz
+          asset_name: simpleadmin-${{ steps.get_version.outputs.VERSION }}.tar.gz
+          asset_content_type: application/gzip
