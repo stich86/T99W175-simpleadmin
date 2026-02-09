@@ -1,7 +1,57 @@
 // SimpleAdmin FOTA Manager
 // Alpine.js component for firmware update management
 
-function fotaManager() {
+// Global Alpine Store for FOTA modal state
+document.addEventListener('alpine:init', () => {
+  Alpine.store('fotaModal', {
+    show: false,
+    title: '',
+    message: '',
+    countdown: 0,
+    action: null,
+    
+    open(title, message, action) {
+      this.title = title;
+      this.message = message;
+      this.action = action;
+      this.countdown = 0; // Start at 0 for confirmation
+      this.show = true;
+    },
+    
+    close() {
+      this.show = false;
+      this.action = null;
+    },
+    
+    confirm() {
+      if (this.action) {
+        this.action();
+      }
+      this.close();
+    },
+    
+    showSuccess(title, message, countdownSeconds = 5) {
+      this.title = title;
+      this.message = message;
+      this.countdown = countdownSeconds;
+      this.show = true;
+      this.action = null;
+      
+      // Start countdown
+      const countdownInterval = setInterval(() => {
+        this.countdown--;
+        if (this.countdown <= 0) {
+          clearInterval(countdownInterval);
+          // Refresh page
+          window.location.href = '/';
+        }
+      }, 1000);
+    }
+  });
+});
+
+// Make it globally available for Alpine.js
+window.fotaManager = function() {
   return {
     updateChannel: 'stable',
     currentVersion: '',
@@ -12,11 +62,6 @@ function fotaManager() {
     isLoading: false,
     statusMessage: '',
     changelog: '',
-    showFotaModal: false,
-    fotaModalTitle: '',
-    fotaModalMessage: '',
-    fotaCountdown: 0,
-    fotaAction: '', // 'apply' or 'rollback'
 
     init() {
       console.log('[FOTA] Initializing...');
@@ -130,85 +175,91 @@ function fotaManager() {
       }
     },
 
-    async applyUpdate() {
+    applyUpdate() {
+      console.log('[FOTA] applyUpdate called, updateDownloaded:', this.updateDownloaded);
       if (!this.updateDownloaded) {
+        console.error('[FOTA] Cannot apply - no update downloaded');
         this.statusMessage = 'No update downloaded';
         return;
       }
 
-      // Show confirmation modal
-      this.fotaModalTitle = 'Apply Update';
-      this.fotaModalMessage = 'This will apply the update and refresh the interface. Continue?';
-      this.fotaAction = 'apply';
-      this.showFotaModal = true;
-      this.fotaCountdown = 0;
+      console.log('[FOTA] Showing confirmation modal via store');
+      // Show confirmation modal with target version using Alpine Store
+      Alpine.store('fotaModal').open(
+        'Update Web UI',
+        `This will update to version ${this.latestVersion}. The interface will refresh automatically.`,
+        () => this.performApplyUpdate()
+      );
     },
 
-    async rollbackUpdate() {
-      if (!this.hasBackup) {
-        this.statusMessage = 'No backup available';
-        return;
-      }
-
-      // Show confirmation modal
-      this.fotaModalTitle = 'Rollback Update';
-      this.fotaModalMessage = 'This will rollback to the previous version and refresh the interface. Continue?';
-      this.fotaAction = 'rollback';
-      this.showFotaModal = true;
-      this.fotaCountdown = 0;
-    },
-
-    async confirmFotaAction() {
-      this.showFotaModal = false;
+    async performApplyUpdate() {
       this.isLoading = true;
-
-      const isApply = this.fotaAction === 'apply';
-      const endpoint = isApply ? '/cgi-bin/fota/apply_update' : '/cgi-bin/fota/rollback_update';
-      const successTitle = isApply ? 'Update Applied!' : 'Rollback Complete!';
-      const successMessage = isApply ? 'The update has been applied successfully.' : 'The system has been rolled back to the previous version.';
-
-      this.statusMessage = isApply ? 'Applying update...' : 'Rolling back...';
+      this.statusMessage = 'Applying update...';
 
       try {
-        const response = await fetch(endpoint, {
+        const response = await fetch('/cgi-bin/fota/apply_update', {
           method: 'POST'
         });
         const data = await response.json();
 
         if (data.ok) {
           // Show success modal with countdown
-          this.fotaModalTitle = successTitle;
-          this.fotaModalMessage = successMessage;
-          this.showFotaModal = true;
-          this.fotaCountdown = 5;
-          this.fotaAction = ''; // Clear action
-
-          // Start countdown
-          const countdownInterval = setInterval(() => {
-            this.fotaCountdown--;
-            if (this.fotaCountdown <= 0) {
-              clearInterval(countdownInterval);
-              // Refresh page
-              window.location.href = '/';
-            }
-          }, 1000);
+          Alpine.store('fotaModal').showSuccess(
+            'Update Complete!',
+            `Updated to version ${this.latestVersion}. Refreshing in ${Alpine.store('fotaModal').countdown} seconds...`,
+            5
+          );
         } else {
-          this.statusMessage = (isApply ? 'Apply' : 'Rollback') + ' failed: ' + data.message;
+          this.statusMessage = 'Apply failed: ' + data.message;
           this.isLoading = false;
-          this.showFotaModal = false;
         }
       } catch (error) {
-        console.error('[FOTA] Operation failed:', error);
-        this.statusMessage = (isApply ? 'Apply' : 'Rollback') + ' failed';
+        console.error('[FOTA] Apply failed:', error);
+        this.statusMessage = 'Apply failed';
         this.isLoading = false;
-        this.showFotaModal = false;
       }
     },
 
-    closeFotaModal() {
-      this.showFotaModal = false;
-      this.fotaCountdown = 0;
-      this.fotaAction = '';
+    rollbackUpdate() {
+      if (!this.hasBackup) {
+        this.statusMessage = 'No backup available';
+        return;
+      }
+
+      // Show confirmation modal with version info using Alpine Store
+      Alpine.store('fotaModal').open(
+        'Rollback Update',
+        `This will rollback to version ${this.currentVersion}. The interface will refresh automatically.`,
+        () => this.performRollback()
+      );
+    },
+
+    async performRollback() {
+      this.isLoading = true;
+      this.statusMessage = 'Rolling back...';
+
+      try {
+        const response = await fetch('/cgi-bin/fota/rollback_update', {
+          method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.ok) {
+          // Show success modal with countdown
+          Alpine.store('fotaModal').showSuccess(
+            'Rollback Complete!',
+            `Rolled back to version ${this.currentVersion}. Refreshing in ${Alpine.store('fotaModal').countdown} seconds...`,
+            5
+          );
+        } else {
+          this.statusMessage = 'Rollback failed: ' + data.message;
+          this.isLoading = false;
+        }
+      } catch (error) {
+        console.error('[FOTA] Rollback failed:', error);
+        this.statusMessage = 'Rollback failed';
+        this.isLoading = false;
+      }
     },
 
     async clearCache() {

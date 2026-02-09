@@ -155,22 +155,86 @@ create_backup() {
     local backup_file="${BACKUP_DIR}/www_previous.tar.gz"
 
     log_info "Creating backup: $backup_file"
+    log_info "WWW_DIR: $WWW_DIR"
+    log_info "Checking if WWW_DIR exists: [ -d '$WWW_DIR' ]"
+
+    # Verify WWW_DIR exists
+    if [ ! -d "$WWW_DIR" ]; then
+        log_error "WWW_DIR does not exist: $WWW_DIR"
+        return 1
+    fi
+
+    # Check if we can read WWW_DIR
+    if [ ! -r "$WWW_DIR" ]; then
+        log_error "Cannot read WWW_DIR: $WWW_DIR"
+        return 1
+    fi
+
+    # List contents for debug
+    log_info "WWW_DIR contents:"
+    ls -la "$WWW_DIR" >&2 || true
+
+    # Create backup directory
+    log_info "Creating backup directory: $BACKUP_DIR"
+    mkdir -p "$BACKUP_DIR" 2>&1 || {
+        log_error "Failed to create backup directory: $BACKUP_DIR"
+        return 1
+    }
+
+    # Check permissions on backup directory
+    log_info "Backup directory permissions:"
+    ls -ld "$BACKUP_DIR" >&2 || true
 
     # Remove old backup if exists
     if [ -f "$backup_file" ]; then
         log_info "Removing old backup..."
-        rm -f "$backup_file"
+        rm -f "$backup_file" 2>&1 || {
+            log_error "Failed to remove old backup: $backup_file"
+            return 1
+        }
     fi
 
-    # Create backup
-    if ! tar czf "$backup_file" -C / www 2>/dev/null; then
+    # Check available disk space
+    local available_space
+    available_space=$(df "$BACKUP_DIR" | tail -1 | awk '{print $4}')
+    log_info "Available disk space: $available_space KB"
+
+    # Create backup using WWW_DIR variable
+    # -C changes to parent directory, then we archive the www directory
+    local parent_dir
+    local www_dirname
+    parent_dir=$(dirname "$WWW_DIR")
+    www_dirname=$(basename "$WWW_DIR")
+
+    log_info "Running: tar czf '$backup_file' -C '$parent_dir' '$www_dirname'"
+    if ! tar czf "$backup_file" -C "$parent_dir" "$www_dirname" 2>&1; then
         log_error "Failed to create backup"
+        log_error "Tar command failed with exit code: $?"
         return 1
     fi
 
-    # Verify backup
-    if [ ! -f "$backup_file" ] || [ $(stat -c%s "$backup_file" 2>/dev/null || stat -f%z "$backup_file" 2>/dev/null) -lt 1000 ]; then
-        log_error "Backup file is invalid or too small"
+    # Verify backup was created
+    if [ ! -f "$backup_file" ]; then
+        log_error "Backup file was not created: $backup_file"
+        return 1
+    fi
+
+    # Get backup size
+    local backup_size
+    backup_size=$(stat -c%s "$backup_file" 2>/dev/null || stat -f%z "$backup_file" 2>/dev/null || echo "0")
+    log_info "Backup created successfully, size: $backup_size bytes"
+
+    # Verify backup is valid tar.gz
+    if ! tar -tzf "$backup_file" > /dev/null 2>&1; then
+        log_error "Backup file is corrupted"
+        rm -f "$backup_file"
+        return 1
+    fi
+
+    # Minimum size check (1KB)
+    if [ "$backup_size" -lt 1024 ]; then
+        log_error "Backup file is too small: $backup_size bytes"
+        rm -f "$backup_file"
         return 1
     fi
 

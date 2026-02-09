@@ -361,11 +361,11 @@
                 <div class="row g-2 mb-2">
                   <div class="col-6">
                     <small class="text-muted d-block" style="font-size: 0.7rem;">Current</small>
-                    <div class="fw-bold text-primary" style="font-size: 0.9rem;" x-text="currentVersion || '-'">-</div>
+                    <div class="fw-bold text-dark" style="font-size: 0.9rem;" x-text="currentVersion || '-'">-</div>
                   </div>
                   <div class="col-6">
                     <small class="text-muted d-block" style="font-size: 0.7rem;">New</small>
-                    <div class="fw-bold" style="font-size: 0.9rem;" x-text="latestVersion || 'Not checked'">-</div>
+                    <div class="fw-bold text-primary" style="font-size: 0.9rem;" x-text="latestVersion || 'Not checked'">-</div>
                   </div>
                 </div>
 
@@ -393,40 +393,56 @@
                   </div>
 
                   <!-- Check/Download/Install Button -->
-                  <div class="col-auto ms-auto">
-                    <!-- Install button (when downloaded) -->
-                    <template x-if="updateDownloaded">
-                      <div class="d-flex gap-2">
-                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearCache()" :disabled="isLoading" title="Clear cached update and re-check">
-                          <span x-show="!isLoading">Clear & Re-check</span>
-                          <span x-show="isLoading">Clearing...</span>
-                        </button>
-                        <button class="btn btn-success" type="button" @click="applyUpdate()" :disabled="isLoading">
-                          Install Update
-                        </button>
-                      </div>
-                    </template>
+                  <div class="col-auto ms-auto d-flex gap-2">
+                    <!-- Clear Cache button (always shown when downloaded) -->
+                    <button x-show="updateDownloaded" class="btn btn-outline-secondary btn-sm" type="button" @click="clearCache()" :disabled="isLoading" title="Clear cached update and re-check" x-cloak>
+                      <span x-show="!isLoading">Clear & Re-check</span>
+                      <span x-show="isLoading">Clearing...</span>
+                    </button>
 
-                    <!-- Download button (when update available but not downloaded) -->
-                    <template x-if="!updateDownloaded && updateAvailable">
-                      <button class="btn btn-warning text-dark" type="button" @click="downloadUpdate()" :disabled="isLoading">
-                        <span x-show="!isLoading">Download Update</span>
-                        <span x-show="isLoading">Downloading...</span>
-                      </button>
-                    </template>
+                    <!-- Main action button: changes based on state -->
+                    <button x-show="!updateDownloaded && !updateAvailable" class="btn btn-primary" type="button" @click="checkUpdates()" :disabled="isLoading" x-cloak>
+                      <span x-show="!isLoading">Check for Update</span>
+                      <span x-show="isLoading">Checking...</span>
+                    </button>
 
-                    <!-- Check button (default state) -->
-                    <template x-if="!updateDownloaded && !updateAvailable">
-                      <button class="btn btn-primary" type="button" @click="checkUpdates()" :disabled="isLoading">
-                        <span x-show="!isLoading">Check for Update</span>
-                        <span x-show="isLoading">Checking...</span>
-                      </button>
-                    </template>
+                    <button x-show="!updateDownloaded && updateAvailable" class="btn btn-warning text-dark" type="button" @click="downloadUpdate()" :disabled="isLoading" x-cloak>
+                      <span x-show="!isLoading">Download Update</span>
+                      <span x-show="isLoading">Downloading...</span>
+                    </button>
+
+                    <button x-show="updateDownloaded" class="btn btn-success" type="button" @click="applyUpdate()" :disabled="isLoading" x-cloak>
+                      Install Update
+                    </button>
                   </div>
 
                 </div>
 
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FOTA Update Modal -->
+        <div class="modal-overlay" 
+            x-show="$store.fotaModal.show" 
+            x-cloak
+            style="display: none;">
+          <div class="loading-modal">
+            <div class="loader" x-show="$store.fotaModal.countdown > 0"></div>
+            <div class="loading-text" style="display: flex; flex-direction: column">
+              <h3 x-text="$store.fotaModal.title">Update Web UI</h3>
+              <p style="margin-top: 0.5rem" x-text="$store.fotaModal.message">
+                This will update to version X.X.X. The interface will refresh automatically.
+              </p>
+            </div>
+            <div class="d-grid gap-2 d-md-block" x-show="$store.fotaModal.countdown === 0">
+              <button class="btn btn-primary" type="button" @click="$store.fotaModal.confirm()">
+                Continue
+              </button>
+              <button class="btn btn-danger" type="button" @click="$store.fotaModal.close()">
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -534,6 +550,7 @@
             </div>
           </div>
         </div>
+
       </div>
 
     <!-- Footer -->
@@ -568,10 +585,12 @@
         </div>
       </div>
     </footer>
+
+
     </main>
 
     <!-- Device Info Modal -->
-    <div class="modal fade" id="deviceInfoModal" tabindex="-1" aria-labelledby="deviceInfoModalLabel" aria-hidden="true" x-data="fetchDeviceInfo()">
+    <div class="modal fade" id="deviceInfoModal" tabindex="-1" aria-labelledby="deviceInfoModalLabel" aria-hidden="true" x-data="fetchDeviceInfo()" x-init="fetchATCommand(); fetchlanIp()">
       <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
           <div class="modal-header">
@@ -810,31 +829,6 @@
             Reboot
           </button>
           <button class="btn btn-danger" type="button" id="globalRebootCancel">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- FOTA Update Modal Countdown -->
-    <div class="modal-overlay" x-show="showFotaModal" x-cloak>
-      <div class="loading-modal">
-        <div class="loader" x-show="fotaCountdown > 0"></div>
-        <div class="loading-text" style="display: flex; flex-direction: column">
-          <h3 x-text="fotaModalTitle">Updating...</h3>
-          <p style="margin-top: 0.5rem">
-            <span x-text="fotaModalMessage">Please wait...</span>
-            <span x-show="fotaCountdown > 0" style="font-weight:500"> Refresh in </span>
-            <span x-show="fotaCountdown > 0" x-text="fotaCountdown" style="font-weight:500"></span>
-            <span x-show="fotaCountdown > 0" style="font-weight:500"> seconds...</span>
-          </p>
-        </div>
-        <!-- Confirmation buttons (only show when countdown is 0) -->
-        <div class="d-grid gap-2 d-md-block mt-3" x-show="fotaCountdown === 0">
-          <button class="btn btn-primary" type="button" @click="confirmFotaAction()">
-            Continue
-          </button>
-          <button class="btn btn-secondary" type="button" @click="closeFotaModal()">
             Cancel
           </button>
         </div>
