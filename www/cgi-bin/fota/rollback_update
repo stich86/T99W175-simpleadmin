@@ -44,11 +44,15 @@ send_fota_response() {
 }
 
 log_error() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1"
+    echo "$msg" >&2
+    echo "$msg" >> /tmp/simpleadmin-fota.log
 }
 
 log_info() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1" >&2
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1"
+    echo "$msg" >&2
+    echo "$msg" >> /tmp/simpleadmin-fota.log
 }
 
 # Restore from backup

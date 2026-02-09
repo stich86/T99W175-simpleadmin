@@ -56,11 +56,15 @@ send_fota_response() {
 }
 
 log_error() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1"
+    echo "$msg" >&2
+    echo "$msg" >> /tmp/simpleadmin-fota.log
 }
 
 log_info() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1" >&2
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1"
+    echo "$msg" >&2
+    echo "$msg" >> /tmp/simpleadmin-fota.log
 }
 
 # Backup configuration files
@@ -275,41 +279,79 @@ apply_update_files() {
     local staging_www=$1
 
     log_info "Applying update to $WWW_DIR"
+    log_info "Source directory: $staging_www"
 
-    # Move old www directory to backup (atomic operation)
-    log_info "Moving old www directory to backup..."
-    if ! mv "$WWW_DIR" "${WWW_DIR}.old"; then
-        log_error "Failed to move old www directory"
+    # Verify staging directory exists
+    if [ ! -d "$staging_www" ]; then
+        log_error "Staging directory does not exist: $staging_www"
         return 1
     fi
 
+    # Verify WWW_DIR exists
+    if [ ! -d "$WWW_DIR" ]; then
+        log_error "Target WWW_DIR does not exist: $WWW_DIR"
+        return 1
+    fi
+
+    # Check disk space
+    local staging_size
+    staging_size=$(du -sk "$staging_www" 2>/dev/null | awk '{print $1}')
+    log_info "Staging directory size: ${staging_size}KB"
+
+    # Move old www directory to backup (atomic operation)
+    log_info "Step 1: Moving old www directory to backup..."
+    log_info "Command: mv '$WWW_DIR' '${WWW_DIR}.old'"
+    if ! mv "$WWW_DIR" "${WWW_DIR}.old" 2>&1; then
+        log_error "Failed to move old www directory"
+        log_error "Exit code: $?"
+        ls -la "$(dirname "$WWW_DIR")" >&2 || true
+        return 1
+    fi
+    log_info "Old www directory moved successfully"
+
     # Move new www directory into place (atomic operation)
-    log_info "Moving new files into place..."
-    if ! mv "$staging_www" "$WWW_DIR"; then
+    log_info "Step 2: Moving new files into place..."
+    log_info "Command: mv '$staging_www' '$WWW_DIR'"
+    if ! mv "$staging_www" "$WWW_DIR" 2>&1; then
         log_error "Failed to move new files"
+        log_error "Exit code: $?"
         # Try to restore old directory
-        mv "${WWW_DIR}.old" "$WWW_DIR"
+        log_info "Attempting to restore old directory..."
+        mv "${WWW_DIR}.old" "$WWW_DIR" 2>&1 || true
         systemctl restart qcmap_httpd 2>/dev/null
         return 1
     fi
+    log_info "New files moved successfully"
 
     # Set permissions
-    chmod -R 755 "$WWW_DIR"
-    chmod +x "$WWW_DIR"/cgi-bin/* 2>/dev/null
+    log_info "Step 3: Setting permissions..."
+    chmod -R 755 "$WWW_DIR" 2>&1 || {
+        log_error "Failed to set permissions on WWW_DIR"
+        return 1
+    }
+    chmod +x "$WWW_DIR"/cgi-bin/* 2>/dev/null || true
+    log_info "Permissions set successfully"
 
     # Restore configuration files
-    log_info "Restoring configuration files..."
-    restore_config_files
+    log_info "Step 4: Restoring configuration files..."
+    if ! restore_config_files 2>&1; then
+        log_error "Failed to restore configuration files"
+        return 1
+    fi
+    log_info "Configuration files restored successfully"
 
     # Start web server
-    log_info "Restarting web server..."
-    systemctl restart qcmap_httpd
+    log_info "Step 5: Restarting web server..."
+    if ! systemctl restart qcmap_httpd 2>&1; then
+        log_error "Failed to restart web server"
+        return 1
+    fi
 
     # Wait a moment for server to start
     sleep 2
 
     # Cleanup old directory in background
-    log_info "Cleaning up old www directory..."
+    log_info "Step 6: Cleaning up old www directory..."
     rm -rf "${WWW_DIR}.old" 2>/dev/null &
 
     log_info "Update applied successfully"
