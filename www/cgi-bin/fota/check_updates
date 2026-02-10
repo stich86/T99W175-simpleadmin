@@ -194,14 +194,31 @@ update_state() {
 
     # Preserve existing backup info if state file exists
     local existing_backup_created="false"
-    local existing_backup_path="\"\""
+    local backup_path_value=""
+    local backup_path_empty=false
 
     if [ -f "$STATE_FILE" ]; then
-        existing_backup_created=$(grep -o '"backup_created"[[:space:]]*:[[:space:]]*[a-z]*' "$STATE_FILE" | sed 's/.*"backup_created"[[:space:]]*:[[:space:]]*\([a-z]*\).*/\1/')
-        existing_backup_path=$(grep -o '"backup_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" | sed 's/.*"backup_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        existing_backup_created=$(grep -o '"backup_created"[[:space:]]*:[[:space:]]*[a-z]*' "$STATE_FILE" 2>/dev/null | sed 's/.*"backup_created"[[:space:]]*:[[:space:]]*\([a-z]*\).*/\1/')
+        local raw_path
+        raw_path=$(grep -o '"backup_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" 2>/dev/null | sed 's/.*"backup_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 
         [ -z "$existing_backup_created" ] && existing_backup_created="false"
-        [ -z "$existing_backup_path" ] && existing_backup_path="\"\""
+
+        # Check if path is empty
+        if [ -z "$raw_path" ]; then
+            backup_path_empty=true
+        else
+            backup_path_value="$raw_path"
+        fi
+    fi
+
+    # Build backup_path JSON value
+    local backup_path_json
+    if [ "$backup_path_empty" = "true" ]; then
+        backup_path_json='""'
+    else
+        # Escape quotes in path
+        backup_path_json="\"$(echo "$backup_path_value" | sed 's/"/\\"/g')\""
     fi
 
     # Create state file manually, preserving backup info
@@ -213,7 +230,7 @@ update_state() {
   "update_available": $update_available,
   "update_downloaded": false,
   "backup_created": $existing_backup_created,
-  "backup_path": "$existing_backup_path",
+  "backup_path": $backup_path_json,
   "download_path": "",
   "status": "idle",
   "last_check": "$timestamp",
