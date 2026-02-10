@@ -1,72 +1,38 @@
 #!/bin/bash
 
 # SimpleAdmin Update System - Apply Update
-# Creates semaphore, launches background worker, returns refresh instruction
-# The worker completes the update and updates the semaphore with the result
+# Updates state to 'updating', launches worker, returns immediately
+# Worker completes update and updates state to 'success'/'error'
 
 SCRIPT_DIR="/WEBSERVER/www/cgi-bin"
-SEMAPHORE_FILE="/data/simpleadmin/update-status.json"
 STATE_DIR="/data/simpleadmin"
 STATE_FILE="${STATE_DIR}/update-state.json"
 WWW_DIR="/WEBSERVER/www"
 
-# Immediately log script start
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] apply_update: Script started" >> /tmp/simpleadmin-fota.log 2>/dev/null || true
+# Log start
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] apply_update: Started" >> /tmp/simpleadmin-fota.log 2>/dev/null || true
 
-# Source session utilities (disable set -e to prevent premature exit)
-if [ -f "$SCRIPT_DIR/session_utils.sh" ]; then
-    set +e
-    . "$SCRIPT_DIR/session_utils.sh"
-    set -e
-else
-    echo "Status: 500 Internal Server Error"
+# Source session utilities (disable set -e)
+set +e
+. "$SCRIPT_DIR/session_utils.sh"
+set -e 2>/dev/null || true
+
+# Validate session
+if ! session_load; then
+    echo "Status: 401 Unauthorized"
     echo "Content-type: application/json"
     echo ""
-    echo '{"ok": false, "message": "session_utils.sh not found"}'
-    exit 1
-fi
-
-# Validate session and require admin
-if ! session_load; then
-    send_json_response 401 '{"ok": false, "message": "Invalid or expired session"}'
+    echo '{"ok": false, "message": "Invalid or expired session"}'
     exit 1
 fi
 
 if ! session_require_role "admin"; then
-    send_json_response 403 '{"ok": false, "message": "Admin privileges required"}'
+    echo "Status: 403 Forbidden"
+    echo "Content-type: application/json"
+    echo ""
+    echo '{"ok": false, "message": "Admin privileges required"}'
     exit 1
 fi
-
-# Helper functions
-log_error() {
-    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1"
-    echo "$msg" >&2
-    echo "$msg" >> /tmp/simpleadmin-fota.log 2>/dev/null || true
-}
-
-log_info() {
-    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1"
-    echo "$msg" >&2
-    echo "$msg" >> /tmp/simpleadmin-fota.log 2>/dev/null || true
-}
-
-# Create or update semaphore file
-create_semaphore() {
-    local status=$1
-    local message=$2
-    local version=$3
-    local timestamp=$(date +%s)
-
-    cat > "$SEMAPHORE_FILE" <<EOF
-{
-  "status": "$status",
-  "message": "$message",
-  "version": "$version",
-  "timestamp": $timestamp
-}
-EOF
-    log_info "Semaphore created/updated: status=$status, version=$version"
-}
 
 # Extract field from JSON
 extract_json_field() {
@@ -75,157 +41,103 @@ extract_json_field() {
     echo "$json" | grep "\"$field\":" | sed 's/.*"'$field'" *: *"\([^"]*\)".*/\1/' | head -n 1
 }
 
-# Extract boolean field from JSON
 extract_json_bool() {
     local json=$1
     local field=$2
     echo "$json" | grep "\"$field\":" | sed 's/.*"'$field'" *: *\([^,}]*\).*/\1/' | head -n 1
 }
 
-# Log startup
-log_info "=== apply_update script started ==="
-log_info "Script: $0"
-log_info "User: ${SESSION_USERNAME:-unknown}"
-log_info "PATH: $PATH"
+# Read state
+state_data=$(cat "$STATE_FILE" 2>/dev/null)
 
-# Main execution
-main() {
-    # Check if state file exists
-    if [ ! -f "$STATE_FILE" ]; then
-        log_error "State file not found: $STATE_FILE"
-        send_json_response 200 '{"ok": false, "message": "Update state not found"}'
-        exit 1
-    fi
+if [ -z "$state_data" ]; then
+    echo "Status: 200 OK"
+    echo "Content-type: application/json"
+    echo ""
+    echo '{"ok": false, "message": "State file not found"}'
+    exit 1
+fi
 
-    # Read state
-    local state_data
-    state_data=$(cat "$STATE_FILE" 2>/dev/null)
+# Extract fields
+update_downloaded=$(extract_json_bool "$state_data" "update_downloaded")
+download_path=$(extract_json_field "$state_data" "download_path")
+latest_version=$(extract_json_field "$state_data" "latest_version")
+current_version=$(extract_json_field "$state_data" "current_version")
 
-    if [ -z "$state_data" ]; then
-        log_error "Failed to read state file"
-        send_json_response 200 '{"ok": false, "message": "Failed to read state file"}'
-        exit 1
-    fi
+# Validate
+if [ "$update_downloaded" != "true" ]; then
+    echo "Status: 200 OK"
+    echo "Content-type: application/json"
+    echo ""
+    echo '{"ok": false, "message": "Update not downloaded"}'
+    exit 1
+fi
 
-    # Extract fields
-    local update_downloaded
-    update_downloaded=$(extract_json_bool "$state_data" "update_downloaded")
+if [ -z "$download_path" ] || [ ! -f "$download_path" ]; then
+    echo "Status: 200 OK"
+    echo "Content-type: application/json"
+    echo ""
+    echo '{"ok": false, "message": "Download file not found"}'
+    exit 1
+fi
 
-    local download_path
-    download_path=$(extract_json_field "$state_data" "download_path")
+if [ ! -f "$SCRIPT_DIR/fota/apply_update_worker.sh" ]; then
+    echo "Status: 200 OK"
+    echo "Content-type: application/json"
+    echo ""
+    echo '{"ok": false, "message": "Worker script not found"}'
+    exit 1
+fi
 
-    local latest_version
-    latest_version=$(extract_json_field "$state_data" "latest_version")
+# Validate version
+if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
+    latest_version="$current_version"
+fi
 
-    local current_version
-    current_version=$(extract_json_field "$state_data" "current_version")
+# Copy worker to /tmp (outside www so it survives rename)
+WORKER_SOURCE="$SCRIPT_DIR/fota/apply_update_worker.sh"
+WORKER_TARGET="/tmp/apply_update_worker_$$.sh"
 
-    # Validate preconditions
-    if [ "$update_downloaded" != "true" ]; then
-        send_json_response 200 '{"ok": false, "message": "Update not downloaded yet"}'
-        exit 1
-    fi
+if ! cp "$WORKER_SOURCE" "$WORKER_TARGET" 2>/dev/null; then
+    echo "Status: 200 OK"
+    echo "Content-type: application/json"
+    echo ""
+    echo '{"ok": false, "message": "Failed to copy worker script"}'
+    exit 1
+fi
 
-    if [ -z "$download_path" ] || [ "$download_path" = "null" ]; then
-        send_json_response 200 '{"ok": false, "message": "Download path not found"}'
-        exit 1
-    fi
+chmod +x "$WORKER_TARGET"
 
-    if [ ! -f "$download_path" ]; then
-        log_error "Downloaded file not found: $download_path"
-        send_json_response 200 '{"ok": false, "message": "Downloaded file not found"}'
-        exit 1
-    fi
+# Check systemd-run
+if ! which systemd-run >/dev/null 2>&1; then
+    rm -f "$WORKER_TARGET"
+    echo "Status: 200 OK"
+    echo "Content-type: application/json"
+    echo ""
+    echo '{"ok": false, "message": "systemd-run not available"}'
+    exit 1
+fi
 
-    # Validate version
-    if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
-        latest_version="$current_version"
-    fi
+# Update state to 'updating' BEFORE launching worker
+# This is the critical moment - state must be updated before response
+sed -i 's/"status": "[^"]*"/"status": "updating"/' "$STATE_FILE" 2>/dev/null
 
-    # Log key variables
-    log_info "=== Update Configuration ==="
-    log_info "Download path: $download_path"
-    log_info "Current version: $current_version"
-    log_info "Latest version: $latest_version"
-    log_info "WWW_DIR: $WWW_DIR"
+# Launch worker via systemd-run
+systemd-run --quiet --scope \
+    "$WORKER_TARGET" "$download_path" "$current_version" >/dev/null 2>&1
 
-    # Verify critical paths
-    if [ ! -f "$download_path" ]; then
-        log_error "Download file does not exist: $download_path"
-        send_json_response 200 '{"ok": false, "message": "Download file not found"}'
-        exit 1
-    fi
+if [ $? -ne 0 ]; then
+    rm -f "$WORKER_TARGET"
+    sed -i 's/"status": "[^"]*"/"status": "error"/' "$STATE_FILE" 2>/dev/null
+    echo "Status: 200 OK"
+    echo "Content-type: application/json"
+    echo ""
+    echo '{"ok": false, "message": "Failed to start worker"}'
+    exit 1
+fi
 
-    if [ ! -f "$SCRIPT_DIR/fota/apply_update_worker.sh" ]; then
-        log_error "Worker script not found: $SCRIPT_DIR/fota/apply_update_worker.sh"
-        send_json_response 200 '{"ok": false, "message": "Worker script not found"}'
-        exit 1
-    fi
-
-    if [ ! -d "$WWW_DIR" ]; then
-        log_error "WWW directory does not exist: $WWW_DIR"
-        send_json_response 200 '{"ok": false, "message": "WWW directory not found"}'
-        exit 1
-    fi
-
-    # Copy worker script to /tmp to survive www rename
-    log_info "=== Copying worker script to /tmp ==="
-
-    local WORKER_SOURCE="$SCRIPT_DIR/fota/apply_update_worker.sh"
-    local WORKER_TARGET="/tmp/apply_update_worker_$$.sh"
-
-    # Copy worker to /tmp (with error handling)
-    set +e
-    cp "$WORKER_SOURCE" "$WORKER_TARGET" 2>>/tmp/simpleadmin-fota.log
-    local cp_result=$?
-    set -e
-
-    if [ $cp_result -ne 0 ] || [ ! -f "$WORKER_TARGET" ]; then
-        log_error "Failed to copy worker script (exit code: $cp_result)"
-        send_json_response 200 '{"ok": false, "message": "Failed to copy worker script"}'
-        exit 1
-    fi
-
-    chmod +x "$WORKER_TARGET" 2>/dev/null || true
-    log_info "✓ Worker copied to: $WORKER_TARGET"
-
-    # Test if systemd-run is available
-    if ! which systemd-run >/dev/null 2>&1; then
-        log_error "systemd-run not found in PATH"
-        send_json_response 200 '{"ok": false, "message": "systemd-run not available"}'
-        rm -f "$WORKER_TARGET"
-        exit 1
-    fi
-
-    # Create semaphore BEFORE launching worker
-    # This ensures status is persisted even if www is renamed
-    create_semaphore "updating" "Update in progress..." "$latest_version"
-
-    # Launch background worker using systemd-run
-    log_info "=== Launching background worker ==="
-
-    set +e
-    systemd-run_output=$(systemd-run --quiet \
-        --scope \
-        "$WORKER_TARGET" "$download_path" "$current_version" 2>&1)
-    local exit_code=$?
-    set -e
-
-    if [ $exit_code -ne 0 ]; then
-        log_error "Failed to launch worker (exit code: $exit_code)"
-        log_error "Output: $systemd-run_output"
-        rm -f "$WORKER_TARGET"
-        create_semaphore "error" "Failed to start background worker" ""
-        send_json_response 200 '{"ok": false, "message": "Failed to start background worker"}'
-        exit 1
-    fi
-
-    log_info "✓ Worker launched successfully"
-
-    # Return response telling browser to refresh after 30 seconds
-    log_info "Returning response with refresh instruction"
-
-    cat <<EOF
+# Return success with refresh instruction
+cat <<EOF
 Status: 200 OK
 Content-type: application/json
 Cache-Control: no-store
@@ -240,13 +152,3 @@ Cache-Control: no-store
   }
 }
 EOF
-}
-
-# Execute main function with error handling
-set +e
-if ! main 2>>/tmp/simpleadmin-fota.log; then
-    log_error "main() function failed"
-    create_semaphore "error" "Update failed during initialization" ""
-    send_json_response 200 '{"ok": false, "message": "Update failed"}'
-    exit 1
-fi

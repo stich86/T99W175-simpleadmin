@@ -46,8 +46,8 @@ document.addEventListener('alpine:init', () => {
 
         if (this.countdown <= 0) {
           clearInterval(countdownInterval);
-          // Refresh page
-          window.location.href = '/';
+          // Refresh to advanced.html (FOTA page)
+          window.location.href = '/advanced.html#fota';
         }
       }, 1000);
     },
@@ -92,52 +92,36 @@ window.fotaManager = function() {
 
     async checkUpdateStatusOnLoad() {
       try {
-        const response = await fetch('/cgi-bin/fota/check_update_status');
+        const response = await fetch('/cgi-bin/fota/get_update_status');
         const data = await response.json();
 
-        if (data.ok && data.status && data.status !== 'none') {
-          console.log('[FOTA] Update status found:', data.status, data.message);
-
+        if (data.ok) {
           if (data.status === 'success') {
             // Show success notification
             Alpine.store('fotaModal').showSuccess(
               'Update Complete!',
-              `Updated to version ${data.version}. ${data.message} Refreshing in `,
+              `Updated to version ${data.latest_version}. Refreshing in `,
               5
             );
 
-            // Clear the semaphore after showing notification
+            // Reset status after showing
             setTimeout(() => {
-              fetch('/cgi-bin/fota/clear_update_status', { method: 'POST' });
-            }, 1000);
+              this.loadStatus();
+            }, 6000);
 
           } else if (data.status === 'error') {
             // Show error notification
-            this.statusMessage = 'Update failed: ' + data.message;
+            this.statusMessage = 'Update failed: ' + (data.error_message || 'Unknown error');
             setTimeout(() => {
-              if (confirm('Update failed: ' + data.message + '\n\nClick OK to clear this status.')) {
-                fetch('/cgi-bin/fota/clear_update_status', { method: 'POST' });
+              if (confirm('Update failed: ' + (data.error_message || 'Unknown error') + '\n\nClick OK to reset.')) {
+                this.loadStatus();
               }
             }, 500);
 
           } else if (data.status === 'updating') {
-            // Check timestamp - if older than 5 minutes, mark as stale/failed
-            const now = Math.floor(Date.now() / 1000);
-            const timestamp = data.timestamp || 0;
-            const staleThreshold = 300; // 5 minutes
-
-            if (timestamp && (now - timestamp) > staleThreshold) {
-              console.warn('[FOTA] Update status stale (older than 5 minutes), treating as failed');
-              this.statusMessage = 'Update failed: Timeout - update process did not complete';
-              setTimeout(() => {
-                if (confirm('Update appears to have stalled (no activity for 5 minutes).\n\nClick OK to clear this status and check logs.')) {
-                  fetch('/cgi-bin/fota/clear_update_status', { method: 'POST' });
-                }
-              }, 500);
-            } else {
-              console.log('[FOTA] Update still in progress (started ' + (now - timestamp) + ' seconds ago)');
-              // Let polling handle it
-            }
+            // Update in progress - could be stale if older than 5 min
+            // But let polling handle it
+            console.log('[FOTA] Update in progress');
           }
         }
       } catch (error) {
