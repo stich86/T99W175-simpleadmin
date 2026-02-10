@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # SimpleAdmin Update System - Rollback Update
-# Restores the previous version from backup
+# Restores the previous version using directory rename (instant rollback)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -29,7 +29,13 @@ STATE_DIR="/data/simpleadmin"
 STATE_FILE="${STATE_DIR}/update-state.json"
 BACKUP_DIR="${STATE_DIR}/backups"
 ROLLBACK_TMP_DIR="${STATE_DIR}/rollback_tmp"
+CONFIG_BACKUP_DIR="${STATE_DIR}/config_backup"
 WWW_DIR="/WEBSERVER/www"
+
+PRESERVE_FILES=(
+    "config/simpleadmin.conf"
+    "cgi-bin/credentials.txt"
+)
 
 # Helper functions
 send_fota_response() {
@@ -55,75 +61,84 @@ log_info() {
     echo "$msg" >> /tmp/simpleadmin-fota.log
 }
 
-# Restore from backup
+# Restore from backup using directory rename (instant!)
 restore_backup() {
-    local backup_file=$1
+    local backup_path=$1
 
-    log_info "Restoring from backup: $backup_file"
+    log_info "Restoring from backup: $backup_path"
 
-    # Verify backup exists
-    if [ ! -f "$backup_file" ]; then
-        log_error "Backup file not found: $backup_file"
+    # Verify backup directory exists
+    if [ ! -d "$backup_path" ]; then
+        log_error "Backup directory not found: $backup_path"
         return 1
     fi
 
-    # Verify backup is valid tar.gz
-    if ! tar -tzf "$backup_file" > /dev/null 2>&1; then
-        log_error "Backup file is corrupted"
-        return 1
-    fi
+    # Move current www to failed (atomic operation)
+    log_info "Step 1: Moving current www to failed..."
+    FAILED_DIR="${WWW_DIR}.failed-$(date +%Y%m%d_%H%M%S)"
 
-    # Clean and create temp directory
-    rm -rf "${ROLLBACK_TMP_DIR:?}"/*
-    mkdir -p "$ROLLBACK_TMP_DIR"
-
-    # Extract backup to temp directory
-    log_info "Extracting backup to temporary directory..."
-    if ! tar xzf "$backup_file" -C "$ROLLBACK_TMP_DIR" 2>/dev/null; then
-        log_error "Failed to extract backup"
-        return 1
-    fi
-
-    # Verify extracted www directory exists
-    if [ ! -d "$ROLLBACK_TMP_DIR/www" ]; then
-        log_error "Backup does not contain www directory"
-        return 1
-    fi
-
-    # Move current www to failed backup (atomic)
-    log_info "Moving current www directory to backup..."
-    if ! mv "$WWW_DIR" "${WWW_DIR}.failed"; then
+    if ! mv "$WWW_DIR" "$FAILED_DIR" 2>&1; then
         log_error "Failed to move current www directory"
         return 1
     fi
+    log_info "  Current www moved to: $FAILED_DIR"
 
-    # Move restored www into place (atomic)
-    log_info "Moving restored www into place..."
-    if ! mv "$ROLLBACK_TMP_DIR/www" "$WWW_DIR"; then
-        log_error "Failed to move restored directory"
-        # Try to restore failed directory
-        mv "${WWW_DIR}.failed" "$WWW_DIR"
+    # Move backup into place (atomic operation)
+    log_info "Step 2: Restoring backup www directory..."
+    if ! mv "$backup_path" "$WWW_DIR" 2>&1; then
+        log_error "Failed to restore backup directory"
+        log_error "CRITICAL: Attempting to restore failed directory..."
+        # Try to restore the failed directory
+        if mv "$FAILED_DIR" "$WWW_DIR" 2>&1; then
+            log_info "  Failed directory restored"
+        else
+            log_error "  CRITICAL: System may be in broken state!"
+        fi
         systemctl restart qcmap_httpd 2>/dev/null
         return 1
     fi
+    log_info "  Backup restored successfully"
 
     # Set permissions
+    log_info "Step 3: Setting permissions..."
     chmod -R 755 "$WWW_DIR"
     chmod +x "$WWW_DIR"/cgi-bin/* 2>/dev/null
+    log_info "  Permissions set"
 
-    # Start web server
-    log_info "Restarting web server..."
-    systemctl restart qcmap_httpd
+    # Restore configuration files
+    log_info "Step 4: Restoring configuration files..."
+    for file in "${PRESERVE_FILES[@]}"; do
+        local filepath="${WWW_DIR}/${file}"
+        local backuppath="${CONFIG_BACKUP_DIR}/$(basename $file)"
+
+        if [ -f "$backuppath" ]; then
+            log_info "  Restoring: $file"
+            cp "$backuppath" "$filepath"
+
+            if [ "$file" = "cgi-bin/credentials.txt" ]; then
+                chmod 600 "$filepath"
+            else
+                chmod 644 "$filepath"
+            fi
+        fi
+    done
+    log_info "  Configuration restored"
+
+    # Restart web server
+    log_info "Step 5: Restarting web server..."
+    if ! systemctl restart qcmap_httpd 2>&1; then
+        log_error "Failed to restart web server"
+        return 1
+    fi
+    log_info "  Web server restarted"
 
     # Wait for server to start
     sleep 2
 
     # Cleanup failed directory in background
-    log_info "Cleaning up failed www directory..."
-    rm -rf "${WWW_DIR}.failed" 2>/dev/null &
-
-    # Cleanup temp directory
-    rm -rf "${ROLLBACK_TMP_DIR}" 2>/dev/null &
+    log_info "Step 6: Cleanup..."
+    rm -rf "$FAILED_DIR" 2>/dev/null &
+    log_info "  Cleanup scheduled"
 
     log_info "Rollback completed successfully"
     return 0
@@ -131,24 +146,49 @@ restore_backup() {
 
 # Main execution
 main() {
-    # Use fixed backup path
-    local backup_file="${BACKUP_DIR}/www_previous.tar.gz"
+    # Extract field from JSON
+    extract_json_field() {
+        local json=$1
+        local field=$2
+        echo "$json" | grep "\"$field\":" | sed 's/.*"'$field'" *: *"\([^"]*\)".*/\1/' | head -n 1
+    }
 
-    # Check if backup exists
-    if [ ! -f "$backup_file" ]; then
-        log_error "Backup file not found: $backup_file"
-        send_fota_response "false" "Backup file missing" "{}"
+    # Read state to get backup path
+    if [ ! -f "$STATE_FILE" ]; then
+        log_error "State file not found"
+        send_fota_response "false" "State file missing" "{}"
+        exit 1
+    fi
+
+    local state_data
+    state_data=$(cat "$STATE_FILE" 2>/dev/null)
+
+    # Extract backup path
+    local backup_path
+    backup_path=$(extract_json_field "$state_data" "backup_path")
+
+    # Check if backup path exists
+    if [ -z "$backup_path" ] || [ "$backup_path" = "null" ]; then
+        log_error "No backup path found in state"
+        send_fota_response "false" "No backup available" "{}"
+        exit 1
+    fi
+
+    # Check if backup directory exists
+    if [ ! -d "$backup_path" ]; then
+        log_error "Backup directory not found: $backup_path"
+        send_fota_response "false" "Backup directory missing" "{}"
         exit 1
     fi
 
     # Perform rollback
-    if ! restore_backup "$backup_file"; then
+    if ! restore_backup "$backup_path"; then
         send_fota_response "false" "Failed to restore backup" "{}"
         exit 1
     fi
 
     log_info "Rollback successful"
-    send_fota_response "true" "Rollback completed successfully" "{\"backup\": \"$backup_file\"}"
+    send_fota_response "true" "Rollback completed successfully" "{\"backup\": \"$backup_path\"}"
 }
 
 # Execute main function

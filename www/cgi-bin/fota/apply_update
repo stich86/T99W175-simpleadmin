@@ -1,15 +1,28 @@
 #!/bin/bash
 
 # SimpleAdmin Update System - Apply Update
-# Creates backup, extracts update, and applies it to /www
+# Creates semaphore, launches background worker, returns refresh instruction
+# The worker completes the update and updates the semaphore with the result
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="/WEBSERVER/www/cgi-bin"
+SEMAPHORE_FILE="/data/simpleadmin/update-status.json"
+STATE_DIR="/data/simpleadmin"
+STATE_FILE="${STATE_DIR}/update-state.json"
+WWW_DIR="/WEBSERVER/www"
 
-# Source session utilities
-if [ -f "$SCRIPT_DIR/../session_utils.sh" ]; then
-    . "$SCRIPT_DIR/../session_utils.sh"
+# Immediately log script start
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] apply_update: Script started" >> /tmp/simpleadmin-fota.log 2>/dev/null || true
+
+# Source session utilities (disable set -e to prevent premature exit)
+if [ -f "$SCRIPT_DIR/session_utils.sh" ]; then
+    set +e
+    . "$SCRIPT_DIR/session_utils.sh"
+    set -e
 else
-    send_json_response 500 '{"ok": false, "message": "session_utils.sh not found"}'
+    echo "Status: 500 Internal Server Error"
+    echo "Content-type: application/json"
+    echo ""
+    echo '{"ok": false, "message": "session_utils.sh not found"}'
     exit 1
 fi
 
@@ -24,96 +37,38 @@ if ! session_require_role "admin"; then
     exit 1
 fi
 
-# Configuration
-STATE_DIR="/data/simpleadmin"
-STATE_FILE="${STATE_DIR}/update-state.json"
-BACKUP_DIR="${STATE_DIR}/backups"
-STAGING_DIR="${STATE_DIR}/staging"
-CONFIG_BACKUP_DIR="${STATE_DIR}/config_backup"
-WWW_DIR="/WEBSERVER/www"
-
-# Files to preserve during update
-PRESERVE_FILES=(
-    "config/simpleadmin.conf"
-    "cgi-bin/credentials.txt"
-)
-
-# Create directories
-mkdir -p "${BACKUP_DIR}"
-mkdir -p "${STAGING_DIR}"
-mkdir -p "${CONFIG_BACKUP_DIR}"
-
 # Helper functions
-send_fota_response() {
-    local ok=$1
-    local message=$2
-    local data=$3
-
-    local payload
-    payload="{\"ok\": $ok, \"message\": \"$message\", \"data\": $data}"
-
-    send_json_response 200 "$payload"
-}
-
 log_error() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $1"
     echo "$msg" >&2
-    echo "$msg" >> /tmp/simpleadmin-fota.log
+    echo "$msg" >> /tmp/simpleadmin-fota.log 2>/dev/null || true
 }
 
 log_info() {
     local msg="[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $1"
     echo "$msg" >&2
-    echo "$msg" >> /tmp/simpleadmin-fota.log
+    echo "$msg" >> /tmp/simpleadmin-fota.log 2>/dev/null || true
 }
 
-# Backup configuration files
-backup_config_files() {
-    log_info "Backing up configuration files..."
+# Create or update semaphore file
+create_semaphore() {
+    local status=$1
+    local message=$2
+    local version=$3
+    local timestamp=$(date +%s)
 
-    for file in "${PRESERVE_FILES[@]}"; do
-        local filepath="${WWW_DIR}/${file}"
-        local backuppath="${CONFIG_BACKUP_DIR}/$(basename $file)"
-
-        if [ -f "$filepath" ]; then
-            log_info "  Backing up: $file"
-            cp "$filepath" "$backuppath"
-        else
-            log_info "  File not found (will be created): $file"
-        fi
-    done
-
-    log_info "Configuration backup completed"
+    cat > "$SEMAPHORE_FILE" <<EOF
+{
+  "status": "$status",
+  "message": "$message",
+  "version": "$version",
+  "timestamp": $timestamp
+}
+EOF
+    log_info "Semaphore created/updated: status=$status, version=$version"
 }
 
-# Restore configuration files
-restore_config_files() {
-    log_info "Restoring configuration files..."
-
-    for file in "${PRESERVE_FILES[@]}"; do
-        local filepath="${WWW_DIR}/${file}"
-        local backuppath="${CONFIG_BACKUP_DIR}/$(basename $file)"
-
-        if [ -f "$backuppath" ]; then
-            log_info "  Restoring: $file"
-            cp "$backuppath" "$filepath"
-
-            # Ensure proper permissions
-            if [ "$file" = "config/credentials.txt" ]; then
-                chmod 600 "$filepath"
-            else
-                chmod 644 "$filepath"
-            fi
-        else
-            log_info "  No backup found for: $file"
-        fi
-    done
-
-    log_info "Configuration restoration completed"
-}
-
-
-# Extract field from JSON using grep/sed
+# Extract field from JSON
 extract_json_field() {
     local json=$1
     local field=$2
@@ -127,243 +82,18 @@ extract_json_bool() {
     echo "$json" | grep "\"$field\":" | sed 's/.*"'$field'" *: *\([^,}]*\).*/\1/' | head -n 1
 }
 
-# Update state file (without jq)
-update_state() {
-    local status=$1
-    local backup_path=$2
-    local error_msg=$3
-
-    local backed_up="false"
-    if [ -n "$backup_path" ]; then
-        backed_up="true"
-    fi
-
-    # Use sed to update fields
-    if [ -n "$status" ]; then
-        sed -i "s/\"status\": \"[^\"]*\"/\"status\": \"$status\"/" "$STATE_FILE"
-    fi
-
-    if [ -n "$backup_path" ]; then
-        sed -i "s|\"backup_path\": \"[^\"]*\"|\"backup_path\": \"$backup_path\"|" "$STATE_FILE"
-    fi
-
-    if [ -n "$error_msg" ]; then
-        sed -i "s/\"error_message\": \"[^\"]*\"/\"error_message\": \"$error_msg\"/" "$STATE_FILE"
-    fi
-
-    sed -i "s/\"backup_created\": [^,}]*/\"backup_created\": $backed_up/" "$STATE_FILE"
-}
-
-# Create backup of current www
-create_backup() {
-    local backup_file="${BACKUP_DIR}/www_previous.tar.gz"
-
-    log_info "Creating backup: $backup_file"
-    log_info "WWW_DIR: $WWW_DIR"
-    log_info "Checking if WWW_DIR exists: [ -d '$WWW_DIR' ]"
-
-    # Verify WWW_DIR exists
-    if [ ! -d "$WWW_DIR" ]; then
-        log_error "WWW_DIR does not exist: $WWW_DIR"
-        return 1
-    fi
-
-    # Check if we can read WWW_DIR
-    if [ ! -r "$WWW_DIR" ]; then
-        log_error "Cannot read WWW_DIR: $WWW_DIR"
-        return 1
-    fi
-
-    # List contents for debug
-    log_info "WWW_DIR contents:"
-    ls -la "$WWW_DIR" >&2 || true
-
-    # Create backup directory
-    log_info "Creating backup directory: $BACKUP_DIR"
-    mkdir -p "$BACKUP_DIR" 2>&1 || {
-        log_error "Failed to create backup directory: $BACKUP_DIR"
-        return 1
-    }
-
-    # Check permissions on backup directory
-    log_info "Backup directory permissions:"
-    ls -ld "$BACKUP_DIR" >&2 || true
-
-    # Remove old backup if exists
-    if [ -f "$backup_file" ]; then
-        log_info "Removing old backup..."
-        rm -f "$backup_file" 2>&1 || {
-            log_error "Failed to remove old backup: $backup_file"
-            return 1
-        }
-    fi
-
-    # Check available disk space
-    local available_space
-    available_space=$(df "$BACKUP_DIR" | tail -1 | awk '{print $4}')
-    log_info "Available disk space: $available_space KB"
-
-    # Create backup using WWW_DIR variable
-    # -C changes to parent directory, then we archive the www directory
-    local parent_dir
-    local www_dirname
-    parent_dir=$(dirname "$WWW_DIR")
-    www_dirname=$(basename "$WWW_DIR")
-
-    log_info "Running: tar czf '$backup_file' -C '$parent_dir' '$www_dirname'"
-    if ! tar czf "$backup_file" -C "$parent_dir" "$www_dirname" 2>&1; then
-        log_error "Failed to create backup"
-        log_error "Tar command failed with exit code: $?"
-        return 1
-    fi
-
-    # Verify backup was created
-    if [ ! -f "$backup_file" ]; then
-        log_error "Backup file was not created: $backup_file"
-        return 1
-    fi
-
-    # Get backup size
-    local backup_size
-    backup_size=$(stat -c%s "$backup_file" 2>/dev/null || stat -f%z "$backup_file" 2>/dev/null || echo "0")
-    log_info "Backup created successfully, size: $backup_size bytes"
-
-    # Verify backup is valid tar.gz
-    if ! tar -tzf "$backup_file" > /dev/null 2>&1; then
-        log_error "Backup file is corrupted"
-        rm -f "$backup_file"
-        return 1
-    fi
-
-    # Minimum size check (1KB)
-    if [ "$backup_size" -lt 1024 ]; then
-        log_error "Backup file is too small: $backup_size bytes"
-        rm -f "$backup_file"
-        return 1
-    fi
-
-    log_info "Backup created successfully"
-    echo "$backup_file"
-    return 0
-}
-
-# Extract downloaded archive
-extract_update() {
-    local archive=$1
-    local extract_dir=$2
-
-    log_info "Extracting update to: $extract_dir"
-
-    # Clean staging directory
-    rm -rf "${extract_dir:?}/"*
-    mkdir -p "$extract_dir"
-
-    # Extract archive
-    if ! tar xzf "$archive" -C "$extract_dir" 2>/dev/null; then
-        log_error "Failed to extract archive"
-        return 1
-    fi
-
-    # Check if www directory exists in extraction
-    if [ ! -d "$extract_dir/www" ]; then
-        log_error "Extracted archive does not contain www directory"
-        return 1
-    fi
-
-    log_info "Archive extracted successfully"
-    return 0
-}
-
-# Apply update by replacing www directory
-apply_update_files() {
-    local staging_www=$1
-
-    log_info "Applying update to $WWW_DIR"
-    log_info "Source directory: $staging_www"
-
-    # Verify staging directory exists
-    if [ ! -d "$staging_www" ]; then
-        log_error "Staging directory does not exist: $staging_www"
-        return 1
-    fi
-
-    # Verify WWW_DIR exists
-    if [ ! -d "$WWW_DIR" ]; then
-        log_error "Target WWW_DIR does not exist: $WWW_DIR"
-        return 1
-    fi
-
-    # Check disk space
-    local staging_size
-    staging_size=$(du -sk "$staging_www" 2>/dev/null | awk '{print $1}')
-    log_info "Staging directory size: ${staging_size}KB"
-
-    # Move old www directory to backup (atomic operation)
-    log_info "Step 1: Moving old www directory to backup..."
-    log_info "Command: mv '$WWW_DIR' '${WWW_DIR}.old'"
-    if ! mv "$WWW_DIR" "${WWW_DIR}.old" 2>&1; then
-        log_error "Failed to move old www directory"
-        log_error "Exit code: $?"
-        ls -la "$(dirname "$WWW_DIR")" >&2 || true
-        return 1
-    fi
-    log_info "Old www directory moved successfully"
-
-    # Move new www directory into place (atomic operation)
-    log_info "Step 2: Moving new files into place..."
-    log_info "Command: mv '$staging_www' '$WWW_DIR'"
-    if ! mv "$staging_www" "$WWW_DIR" 2>&1; then
-        log_error "Failed to move new files"
-        log_error "Exit code: $?"
-        # Try to restore old directory
-        log_info "Attempting to restore old directory..."
-        mv "${WWW_DIR}.old" "$WWW_DIR" 2>&1 || true
-        systemctl restart qcmap_httpd 2>/dev/null
-        return 1
-    fi
-    log_info "New files moved successfully"
-
-    # Set permissions
-    log_info "Step 3: Setting permissions..."
-    chmod -R 755 "$WWW_DIR" 2>&1 || {
-        log_error "Failed to set permissions on WWW_DIR"
-        return 1
-    }
-    chmod +x "$WWW_DIR"/cgi-bin/* 2>/dev/null || true
-    log_info "Permissions set successfully"
-
-    # Restore configuration files
-    log_info "Step 4: Restoring configuration files..."
-    if ! restore_config_files 2>&1; then
-        log_error "Failed to restore configuration files"
-        return 1
-    fi
-    log_info "Configuration files restored successfully"
-
-    # Start web server
-    log_info "Step 5: Restarting web server..."
-    if ! systemctl restart qcmap_httpd 2>&1; then
-        log_error "Failed to restart web server"
-        return 1
-    fi
-
-    # Wait a moment for server to start
-    sleep 2
-
-    # Cleanup old directory in background
-    log_info "Step 6: Cleaning up old www directory..."
-    rm -rf "${WWW_DIR}.old" 2>/dev/null &
-
-    log_info "Update applied successfully"
-    return 0
-}
+# Log startup
+log_info "=== apply_update script started ==="
+log_info "Script: $0"
+log_info "User: ${SESSION_USERNAME:-unknown}"
+log_info "PATH: $PATH"
 
 # Main execution
 main() {
     # Check if state file exists
     if [ ! -f "$STATE_FILE" ]; then
-        log_error "State file not found"
-        send_fota_response "false" "Update state not found" "{}"
+        log_error "State file not found: $STATE_FILE"
+        send_json_response 200 '{"ok": false, "message": "Update state not found"}'
         exit 1
     fi
 
@@ -373,7 +103,7 @@ main() {
 
     if [ -z "$state_data" ]; then
         log_error "Failed to read state file"
-        send_fota_response "false" "Failed to read state file" "{}"
+        send_json_response 200 '{"ok": false, "message": "Failed to read state file"}'
         exit 1
     fi
 
@@ -387,66 +117,136 @@ main() {
     local latest_version
     latest_version=$(extract_json_field "$state_data" "latest_version")
 
+    local current_version
+    current_version=$(extract_json_field "$state_data" "current_version")
+
     # Validate preconditions
     if [ "$update_downloaded" != "true" ]; then
-        send_fota_response "false" "Update not downloaded yet" "{}"
+        send_json_response 200 '{"ok": false, "message": "Update not downloaded yet"}'
         exit 1
     fi
 
     if [ -z "$download_path" ] || [ "$download_path" = "null" ]; then
-        send_fota_response "false" "Download path not found" "{}"
+        send_json_response 200 '{"ok": false, "message": "Download path not found"}'
         exit 1
     fi
 
     if [ ! -f "$download_path" ]; then
         log_error "Downloaded file not found: $download_path"
-        update_state "error" "" "Downloaded file missing"
-        send_fota_response "false" "Downloaded file not found" "{}"
+        send_json_response 200 '{"ok": false, "message": "Downloaded file not found"}'
         exit 1
     fi
 
-    # Update status to updating
-    update_state "updating" "" ""
+    # Validate version
+    if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
+        latest_version="$current_version"
+    fi
 
-    # Step 0: Backup configuration files
-    log_info "Step 0: Backing up configuration files..."
-    backup_config_files
+    # Log key variables
+    log_info "=== Update Configuration ==="
+    log_info "Download path: $download_path"
+    log_info "Current version: $current_version"
+    log_info "Latest version: $latest_version"
+    log_info "WWW_DIR: $WWW_DIR"
 
-    # Step 1: Create backup
-    log_info "Step 1: Creating backup..."
-    backup_file=""
-    if ! backup_file=$(create_backup); then
-        update_state "error" "" "Failed to create backup"
-        send_fota_response "false" "Failed to create backup" "{}"
+    # Verify critical paths
+    if [ ! -f "$download_path" ]; then
+        log_error "Download file does not exist: $download_path"
+        send_json_response 200 '{"ok": false, "message": "Download file not found"}'
         exit 1
     fi
 
-    # Step 2: Extract update
-    log_info "Step 2: Extracting update..."
-    if ! extract_update "$download_path" "$STAGING_DIR"; then
-        update_state "error" "$backup_file" "Failed to extract update"
-        send_fota_response "false" "Failed to extract update" "{}"
+    if [ ! -f "$SCRIPT_DIR/fota/apply_update_worker.sh" ]; then
+        log_error "Worker script not found: $SCRIPT_DIR/fota/apply_update_worker.sh"
+        send_json_response 200 '{"ok": false, "message": "Worker script not found"}'
         exit 1
     fi
 
-    # Step 3: Apply update
-    log_info "Step 3: Applying update..."
-    if ! apply_update_files "${STAGING_DIR}/www"; then
-        update_state "error" "$backup_file" "Failed to apply update"
-        send_fota_response "false" "Failed to apply update" "{}"
+    if [ ! -d "$WWW_DIR" ]; then
+        log_error "WWW directory does not exist: $WWW_DIR"
+        send_json_response 200 '{"ok": false, "message": "WWW directory not found"}'
         exit 1
     fi
 
-    # Step 4: Cleanup staging
-    log_info "Step 4: Cleanup..."
-    rm -rf "${STAGING_DIR:?}"/www
+    # Copy worker script to /tmp to survive www rename
+    log_info "=== Copying worker script to /tmp ==="
 
-    # Update state to success
-    update_state "success" "$backup_file" ""
+    local WORKER_SOURCE="$SCRIPT_DIR/fota/apply_update_worker.sh"
+    local WORKER_TARGET="/tmp/apply_update_worker_$$.sh"
 
-    log_info "Update completed successfully!"
-    send_fota_response "true" "Update applied successfully" "{\"version\": \"$latest_version\", \"backup\": \"$backup_file\"}"
+    # Copy worker to /tmp (with error handling)
+    set +e
+    cp "$WORKER_SOURCE" "$WORKER_TARGET" 2>>/tmp/simpleadmin-fota.log
+    local cp_result=$?
+    set -e
+
+    if [ $cp_result -ne 0 ] || [ ! -f "$WORKER_TARGET" ]; then
+        log_error "Failed to copy worker script (exit code: $cp_result)"
+        send_json_response 200 '{"ok": false, "message": "Failed to copy worker script"}'
+        exit 1
+    fi
+
+    chmod +x "$WORKER_TARGET" 2>/dev/null || true
+    log_info "✓ Worker copied to: $WORKER_TARGET"
+
+    # Test if systemd-run is available
+    if ! which systemd-run >/dev/null 2>&1; then
+        log_error "systemd-run not found in PATH"
+        send_json_response 200 '{"ok": false, "message": "systemd-run not available"}'
+        rm -f "$WORKER_TARGET"
+        exit 1
+    fi
+
+    # Create semaphore BEFORE launching worker
+    # This ensures status is persisted even if www is renamed
+    create_semaphore "updating" "Update in progress..." "$latest_version"
+
+    # Launch background worker using systemd-run
+    log_info "=== Launching background worker ==="
+
+    set +e
+    systemd-run_output=$(systemd-run --quiet \
+        --scope \
+        "$WORKER_TARGET" "$download_path" "$current_version" 2>&1)
+    local exit_code=$?
+    set -e
+
+    if [ $exit_code -ne 0 ]; then
+        log_error "Failed to launch worker (exit code: $exit_code)"
+        log_error "Output: $systemd-run_output"
+        rm -f "$WORKER_TARGET"
+        create_semaphore "error" "Failed to start background worker" ""
+        send_json_response 200 '{"ok": false, "message": "Failed to start background worker"}'
+        exit 1
+    fi
+
+    log_info "✓ Worker launched successfully"
+
+    # Return response telling browser to refresh after 30 seconds
+    log_info "Returning response with refresh instruction"
+
+    cat <<EOF
+Status: 200 OK
+Content-type: application/json
+Cache-Control: no-store
+
+{
+  "ok": true,
+  "refresh_after": 30,
+  "message": "Update started in background. Page will refresh automatically.",
+  "data": {
+    "version": "$latest_version",
+    "current_version": "$current_version"
+  }
+}
+EOF
 }
 
-# Execute main function
-main
+# Execute main function with error handling
+set +e
+if ! main 2>>/tmp/simpleadmin-fota.log; then
+    log_error "main() function failed"
+    create_semaphore "error" "Update failed during initialization" ""
+    send_json_response 200 '{"ok": false, "message": "Update failed"}'
+    exit 1
+fi

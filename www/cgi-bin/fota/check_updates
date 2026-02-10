@@ -125,8 +125,9 @@ fetch_latest_release() {
         api_url="https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=5"
         log_info "Fetching beta releases from GitHub..."
     else
-        api_url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
-        log_info "Fetching latest stable release from GitHub..."
+        # For stable, also fetch multiple to get history
+        api_url="https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=3"
+        log_info "Fetching stable releases from GitHub..."
     fi
 
     local response
@@ -137,72 +138,41 @@ fetch_latest_release() {
         return 1
     fi
 
-    local latest_version
-    local download_url
-    local changelog
-
-    if [[ "$channel" == "beta" ]]; then
-        # For beta: Use jq to extract first prerelease
-        if [ ! -x "$JQ_BIN" ]; then
-            log_error "jq not found at $JQ_BIN"
-            return 2
-        fi
-
-        # Extract first prerelease using jq
-        local beta_json
-        beta_json=$(echo "$response" | "$JQ_BIN" '[.[] | select(.prerelease == true)] | .[0]' 2>/dev/null)
-        local jq_exit_code=$?
-
-        # Return 2 (error) if jq command failed
-        if [ $jq_exit_code -ne 0 ]; then
-            log_error "jq parsing failed"
-            return 2
-        fi
-
-        # Return 1 (no beta available) if result is null or empty
-        if [[ "$beta_json" == "null" ]] || [[ -z "$beta_json" ]]; then
-            log_info "No beta releases found"
-            return 1
-        fi
-
-        # Extract fields using jq
-        latest_version=$(echo "$beta_json" | "$JQ_BIN" -r '.tag_name // empty' 2>/dev/null | sed 's/^v//')
-
-        if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
-            log_error "Failed to extract tag_name from beta release"
-            return 2
-        fi
-
-        # Find tar.gz download URL from assets
-        download_url=$(echo "$beta_json" | "$JQ_BIN" -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url // empty' 2>/dev/null | head -n 1)
-
-        # Extract body/changelog
-        changelog=$(echo "$beta_json" | "$JQ_BIN" -r '.body // ""' 2>/dev/null | head -c 500)
-    else
-        # For stable: Use jq for cleaner parsing
-        if [ ! -x "$JQ_BIN" ]; then
-            log_error "jq not found at $JQ_BIN"
-            return 1
-        fi
-
-        latest_version=$(echo "$response" | "$JQ_BIN" -r '.tag_name // empty' 2>/dev/null | sed 's/^v//')
-
-        if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
-            log_error "Failed to extract tag_name from stable release"
-            return 1
-        fi
-
-        # Find tar.gz download URL from assets
-        download_url=$(echo "$response" | "$JQ_BIN" -r '.assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url // empty' 2>/dev/null | head -n 1)
-
-        # Extract body/changelog
-        changelog=$(echo "$response" | "$JQ_BIN" -r '.body // ""' 2>/dev/null | head -c 500)
+    if [ ! -x "$JQ_BIN" ]; then
+        log_error "jq not found at $JQ_BIN"
+        return 2
     fi
 
-    # Escape changelog for JSON
-    changelog=$(echo "$changelog" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
+    local releases_json
+    local filter
 
-    echo "$latest_version|$download_url|$changelog"
+    if [[ "$channel" == "beta" ]]; then
+        # Filter for prerelease only, take first 3
+        filter='[.[] | select(.prerelease == true)] | .[0:3]'
+    else
+        # Filter for non-prerelease only, take first 3
+        filter='[.[] | select(.prerelease == false)] | .[0:3]'
+    fi
+
+    releases_json=$(echo "$response" | "$JQ_BIN" "$filter" 2>/dev/null)
+    local jq_exit_code=$?
+
+    if [ $jq_exit_code -ne 0 ]; then
+        log_error "jq parsing failed"
+        return 2
+    fi
+
+    # Check if empty
+    local release_count
+    release_count=$(echo "$releases_json" | "$JQ_BIN" 'length' 2>/dev/null)
+
+    if [[ "$release_count" == "0" ]] || [[ "$release_count" == "null" ]]; then
+        log_info "No releases found for channel: $channel"
+        return 1
+    fi
+
+    # Output all releases as JSON array
+    echo "$releases_json"
     return 0
 }
 
@@ -214,9 +184,13 @@ update_state() {
     local changelog=$4
     local update_available=$5
     local channel=$6
+    local available_releases=$7  # JSON array of available releases
 
     local timestamp
     timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Escape changelog for JSON
+    changelog=$(echo "$changelog" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
 
     # Create state file manually
     cat > "$STATE_FILE" <<EOF
@@ -233,6 +207,7 @@ update_state() {
   "last_check": "$timestamp",
   "download_url": "$download_url",
   "changelog": "$changelog",
+  "available_releases": $available_releases,
   "error_message": ""
 }
 EOF
@@ -271,9 +246,9 @@ main() {
 
     log_info "Current version: $current_version"
 
-    # Fetch latest release for channel
-    local release_info
-    release_info=$(fetch_latest_release "$channel")
+    # Fetch releases for channel (returns JSON array)
+    local releases_json
+    releases_json=$(fetch_latest_release "$channel")
     local fetch_result=$?
 
     # Handle different fetch results
@@ -282,44 +257,66 @@ main() {
         send_fota_response "false" "Failed to check for updates" "{}"
         exit 1
     elif [ $fetch_result -eq 1 ]; then
-        # No beta releases available (not an error)
+        # No releases available
         if [[ "$channel" == "beta" ]]; then
-            log_info "No beta releases available"
-            # Set latest to current to show "up to date" state
+            log_info "No beta releases available - creating empty state"
+
+            # Create empty state for beta
             latest_version="$current_version"
             download_url=""
             changelog="No beta releases available at this time."
+            releases_json="[]"
+            update_available="false"
+
+            # Update state with empty releases
+            update_state "$current_version" "$latest_version" "$download_url" "$changelog" "$update_available" "$channel" "$releases_json"
+
+            # Send response
+            send_fota_response "true" "Already up to date" "$(cat "$STATE_FILE")"
+            exit 0
         else
+            log_error "No stable releases found - this should not happen"
             send_fota_response "false" "Failed to fetch release info" "{}"
             exit 1
         fi
     else
-        # Success - parse the release info
-        IFS='|' read -r latest_version download_url changelog <<< "$release_info"
+        # Success - extract first release as "latest"
+        latest_version=$(echo "$releases_json" | "$JQ_BIN" -r '.[0].tag_name // empty' 2>/dev/null | sed 's/^v//')
+
+        if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
+            log_error "Failed to extract version from releases"
+            send_fota_response "false" "Failed to parse release data" "{}"
+            exit 1
+        fi
+
+        download_url=$(echo "$releases_json" | "$JQ_BIN" -r '.[0].assets[] | select(.name | endswith(".tar.gz")) | .browser_download_url // empty' 2>/dev/null | head -n 1)
+        changelog=$(echo "$releases_json" | "$JQ_BIN" -r '.[0].body // ""' 2>/dev/null | head -c 500)
+
         log_info "Latest $channel version: $latest_version"
-    fi
+        log_info "Available releases: $(echo "$releases_json" | "$JQ_BIN" 'length')"
 
-    # Compare versions
-    local update_available="false"
-    local comparison
-    # Temporarily disable set -e to allow non-zero return
-    set +e
-    compare_versions "$current_version" "$latest_version"
-    comparison=$?
-    set -e
+        # Compare versions
+        local update_available="false"
+        local comparison
+        # Temporarily disable set -e to allow non-zero return
+        set +e
+        compare_versions "$current_version" "$latest_version"
+        comparison=$?
+        set -e
 
-    if [ $comparison -eq 2 ]; then
-        update_available="true"
-        log_info "Update available!"
-    else
-        log_info "Already up to date"
+        if [ $comparison -eq 2 ]; then
+            update_available="true"
+            log_info "Update available!"
+        else
+            log_info "Already up to date"
+        fi
     fi
 
     local timestamp
     timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    # Update state with channel
-    update_state "$current_version" "$latest_version" "$download_url" "$changelog" "$update_available" "$channel"
+    # Update state with all available releases (even if empty for beta)
+    update_state "$current_version" "$latest_version" "$download_url" "$changelog" "$update_available" "$channel" "$releases_json"
 
     # Send response - read from state file
     local message

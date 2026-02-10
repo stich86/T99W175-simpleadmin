@@ -78,6 +78,29 @@ main() {
     # Create directories
     mkdir -p "$DOWNLOAD_DIR"
 
+    # Read POST body if present (for custom download_url)
+    local post_download_url=""
+    local post_version=""
+
+    if [ "$REQUEST_METHOD" = "POST" ] && [ -n "$CONTENT_LENGTH" ]; then
+        local post_body
+        post_body=$(cat)
+
+        # Extract download_url from POST body
+        post_download_url=$(echo "$post_body" | grep -o '"download_url"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+        # Extract version from POST body
+        post_version=$(echo "$post_body" | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+        if [ -n "$post_download_url" ]; then
+            log_info "Custom download_url provided: $post_download_url"
+        fi
+
+        if [ -n "$post_version" ]; then
+            log_info "Target version: $post_version"
+        fi
+    fi
+
     # Check if state file exists
     if [ ! -f "$STATE_FILE" ]; then
         send_fota_response "false" "Update state not found. Please check for updates first." "{}"
@@ -103,15 +126,25 @@ main() {
     fi
 
     local download_url
-    download_url=$(extract_json_field "$state_data" "download_url")
+    # Use POST body download_url if provided, otherwise fall back to state
+    if [ -n "$post_download_url" ]; then
+        download_url="$post_download_url"
+    else
+        download_url=$(extract_json_field "$state_data" "download_url")
+    fi
 
     if [ -z "$download_url" ] || [ "$download_url" = "null" ]; then
-        send_fota_response "false" "Download URL not found in state" "{}"
+        send_fota_response "false" "Download URL not found" "{}"
         exit 1
     fi
 
     local latest_version
-    latest_version=$(extract_json_field "$state_data" "latest_version")
+    # Use POST body version if provided, otherwise fall back to state
+    if [ -n "$post_version" ]; then
+        latest_version="$post_version"
+    else
+        latest_version=$(extract_json_field "$state_data" "latest_version")
+    fi
 
     # Check if already downloaded
     local existing_download
