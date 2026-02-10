@@ -150,13 +150,13 @@ for file in "${PRESERVE_FILES[@]}"; do
     fi
 done
 
+# Remove ANY existing backup directories (keep only one backup)
+log_info "Removing old backup directories..."
+rm -rf "${WWW_DIR}-"* 2>/dev/null
+
 # Backup www by rename (instant!)
 log_info "Creating backup: $WWW_DIR -> $WWW_DIR-$CURRENT_VERSION"
 BACKUP_WWW_DIR="${WWW_DIR}-${CURRENT_VERSION}"
-
-if [ -d "$BACKUP_WWW_DIR" ]; then
-    rm -rf "$BACKUP_WWW_DIR"
-fi
 
 if ! mv "$WWW_DIR" "$BACKUP_WWW_DIR" 2>&1; then
     log_error "Failed to backup www"
@@ -215,6 +215,8 @@ rm -f "$DOWNLOAD_PATH" 2>/dev/null && log_info "Downloaded file removed"
 
 # Update state to success and update version info
 update_state "success" ""
+# Save previous_version before updating current_version
+sed -i "s|\"previous_version\": \"[^\"]*\"|\"previous_version\": \"$CURRENT_VERSION\"|" "$STATE_FILE" 2>/dev/null
 # Update current_version to new version
 sed -i "s|\"current_version\": \"[^\"]*\"|\"current_version\": \"$latest_version\"|" "$STATE_FILE" 2>/dev/null
 # Clear download path

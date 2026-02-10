@@ -52,6 +52,7 @@ main() {
   "channel": "stable",
   "current_version": "",
   "latest_version": "",
+  "previous_version": "",
   "update_available": false,
   "update_downloaded": false,
   "backup_created": false,

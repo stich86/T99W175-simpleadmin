@@ -361,7 +361,7 @@
                 <div class="row g-2 mb-2">
                   <div class="col-6">
                     <small class="text-muted d-block" style="font-size: 0.7rem;">Current</small>
-                    <div class="fw-bold text-dark" style="font-size: 0.9rem;" x-text="currentVersion || '-'">-</div>
+                    <div class="fw-bold text-body" style="font-size: 0.9rem;" x-text="currentVersion || '-'">-</div>
                   </div>
                   <div class="col-6">
                     <small class="text-muted d-block" style="font-size: 0.7rem;">New</small>
@@ -388,8 +388,8 @@
 
                 <!-- Changelog -->
                 <div class="mb-2" x-show="changelog && changelog !== ''" x-cloak>
-                  <div class="card bg-light" style="max-height: 80px; overflow-y: auto;">
-                    <div class="card-body small p-2" style="white-space: pre-wrap; font-size: 0.75rem;" x-text="changelog"></div>
+                  <div class="card" style="max-height: 80px; overflow-y: auto;">
+                    <div class="card-body small p-2 bg-body-tertiary" style="white-space: pre-wrap; font-size: 0.75rem;" x-text="changelog"></div>
                   </div>
                 </div>
 
@@ -401,16 +401,13 @@
                     <small class="text-muted" x-show="statusMessage && !isLoading" x-text="statusMessage"></small>
                   </div>
 
-                  <!-- Rollback Button (when backup available) -->
-                  <div class="col-auto" x-show="hasBackup">
-                    <button class="btn btn-outline-danger btn-sm" type="button" @click="rollbackUpdate()" :disabled="isLoading">
-                      <span x-show="!isLoading">Rollback</span>
-                      <span x-show="isLoading">Rolling back...</span>
-                    </button>
-                  </div>
-
-                  <!-- Check/Download/Install Button -->
+                  <!-- Check/Download/Install/Rollback Button -->
                   <div class="col-auto ms-auto d-flex gap-2">
+                    <!-- Rollback button (when backup available) -->
+                    <button x-show="hasBackup" class="btn btn-danger btn-sm" type="button" @click="rollbackUpdate()" :disabled="isLoading" x-cloak>
+                      <span x-text="'Rollback to ' + previousVersion">Rollback</span>
+                    </button>
+
                     <!-- Clear Cache button (always shown when downloaded) -->
                     <button x-show="updateDownloaded" class="btn btn-outline-secondary btn-sm" type="button" @click="clearCache()" :disabled="isLoading" title="Clear cached update and re-check" x-cloak>
                       <span x-show="!isLoading">Clear & Re-check</span>
@@ -453,7 +450,7 @@
                 This will update to version X.X.X. The interface will refresh automatically.
               </p>
             </div>
-            <div class="d-grid gap-2 d-md-block" x-show="$store.fotaModal.countdown === 0 || !$store.fotaModal.hideButtons">
+            <div class="d-grid gap-2 d-md-block" x-show="!$store.fotaModal.hideButtons" x-cloak>
               <button class="btn btn-primary" type="button" @click="$store.fotaModal.confirm()">
                 Continue
               </button>

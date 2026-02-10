@@ -9,13 +9,13 @@ document.addEventListener('alpine:init', () => {
     message: '',
     countdown: 0,
     action: null,
-    hideButtons: false,  // New flag to hide buttons during countdown
+    hideButtons: false,
 
     open(title, message, action) {
       this.title = title;
       this.message = message;
       this.action = action;
-      this.countdown = 0; // Start at 0 for confirmation
+      this.countdown = 0;
       this.hideButtons = false;
       this.show = true;
     },
@@ -38,12 +38,10 @@ document.addEventListener('alpine:init', () => {
       this.countdown = countdownSeconds;
       this.show = true;
       this.action = null;
-      this.hideButtons = true;  // Hide buttons during countdown
+      this.hideButtons = true;
 
-      // Update message with initial countdown
       this.updateCountdownMessage(message);
 
-      // Start countdown
       const countdownInterval = setInterval(() => {
         this.countdown--;
         this.updateCountdownMessage(message);
@@ -51,10 +49,8 @@ document.addEventListener('alpine:init', () => {
         if (this.countdown <= 0) {
           clearInterval(countdownInterval);
           if (autoRefresh) {
-            // Reload the page
             window.location.reload();
           } else {
-            // Just close the modal
             this.show = false;
             this.hideButtons = false;
           }
@@ -65,17 +61,15 @@ document.addEventListener('alpine:init', () => {
     showMessage(title, message, autoHide = true, onClose = null) {
       this.title = title;
       this.message = message;
-      this.countdown = 0;  // No countdown
+      this.countdown = 0;
       this.action = null;
-      this.hideButtons = true;  // Hide buttons
+      this.hideButtons = true;
       this.show = true;
 
       if (autoHide) {
-        // Auto-hide after 4 seconds
         setTimeout(() => {
           this.show = false;
           this.hideButtons = false;
-          // Call onClose callback if provided
           if (onClose && typeof onClose === 'function') {
             onClose();
           }
@@ -95,6 +89,7 @@ window.fotaManager = function() {
     updateChannel: 'stable',
     currentVersion: '',
     latestVersion: '',
+    previousVersion: '',
     selectedVersion: '',
     updateAvailable: false,
     updateDownloaded: false,
@@ -108,20 +103,15 @@ window.fotaManager = function() {
 
     init() {
       console.log('[FOTA] Initializing...');
-
-      // Check for completed update on page load
       this.checkUpdateStatusOnLoad().then(() => {
-        // Only check for updates if status is idle (not after update)
         this.getStatus().then(data => {
           if (data.status === 'idle') {
             this.checkUpdates();
           } else {
-            // Just load the status without checking GitHub
             this.loadStatus();
           }
         });
 
-        // Check if update is in progress and start polling
         this.$nextTick(() => {
           this.checkUpdateInProgress();
         });
@@ -140,29 +130,36 @@ window.fotaManager = function() {
 
     async checkUpdateStatusOnLoad() {
       try {
-        // First call: get status WITHOUT reset
         const response = await fetch('/cgi-bin/fota/get_update_status');
         const data = await response.json();
 
-        // Check if status exists and is success
         if (data.status === 'success') {
-          console.log('[FOTA] Update successful, showing banner');
-          // Show success notification (no countdown, just message)
-          // Pass a callback that will be executed after the banner closes
-          Alpine.store('fotaModal').showMessage(
-            '✓ Update Complete!',
-            `Updated to version ${data.latest_version}.`,
-            true,  // autoHide
-            async () => {
-              // After banner closes (4 sec), reset status and reload UI
-              console.log('[FOTA] Banner closed, resetting status and reloading UI');
-              await fetch('/cgi-bin/fota/get_update_status?reset=true');
-              this.loadStatus();
-            }
-          );
+          const isRollback = data.previous_version &&
+                             data.previous_version !== data.current_version &&
+                             data.latest_version === data.previous_version;
 
+          if (isRollback) {
+            Alpine.store('fotaModal').showMessage(
+              '✓ Rollback Complete!',
+              `Rolled back to version ${data.current_version}.`,
+              true,
+              async () => {
+                await fetch('/cgi-bin/fota/get_update_status?reset=true');
+                this.loadStatus();
+              }
+            );
+          } else {
+            Alpine.store('fotaModal').showMessage(
+              '✓ Update Complete!',
+              `Updated to version ${data.current_version}.`,
+              true,
+              async () => {
+                await fetch('/cgi-bin/fota/get_update_status?reset=true');
+                this.loadStatus();
+              }
+            );
+          }
         } else if (data.status === 'error') {
-          // Show error notification
           this.statusMessage = 'Update failed: ' + (data.error_message || 'Unknown error');
           setTimeout(() => {
             if (confirm('Update failed: ' + (data.error_message || 'Unknown error') + '\n\nClick OK to reset.')) {
@@ -170,11 +167,6 @@ window.fotaManager = function() {
               this.loadStatus();
             }
           }, 500);
-
-        } else if (data.status === 'updating') {
-          // Update in progress - could be stale if older than 5 min
-          // But let polling handle it
-          console.log('[FOTA] Update in progress');
         }
       } catch (error) {
         console.error('[FOTA] Failed to check update status on load:', error);
@@ -187,7 +179,6 @@ window.fotaManager = function() {
         const data = await response.json();
 
         if (data.status === 'updating') {
-          console.log('[FOTA] Update in progress, starting polling...');
           this.startPolling();
         }
       } catch (error) {
@@ -197,20 +188,17 @@ window.fotaManager = function() {
 
     startPolling() {
       if (this.pollingInterval) {
-        return; // Already polling
+        return;
       }
 
       this.updateInProgress = true;
       this.statusMessage = 'Updating... Please wait.';
-
-      console.log('[FOTA] Starting status polling...');
+      console.log('[FOTA] Started polling for update status');
 
       this.pollingInterval = setInterval(async () => {
         try {
           const response = await fetch('/cgi-bin/fota/get_update_status');
           const data = await response.json();
-
-          console.log('[FOTA] Poll status:', data.status);
 
           if (data.status === 'success') {
             this.stopPolling();
@@ -229,12 +217,10 @@ window.fotaManager = function() {
             this.isLoading = false;
             this.statusMessage = 'Update failed: ' + (data.error_message || 'Unknown error');
           }
-          // Keep polling if status is still 'updating'
         } catch (error) {
           console.error('[FOTA] Polling error:', error);
-          // Don't stop polling on network errors, might be temporary
         }
-      }, 2000); // Poll every 2 seconds
+      }, 2000);
     },
 
     stopPolling() {
@@ -246,24 +232,15 @@ window.fotaManager = function() {
     },
 
     selectRelease(version) {
-      console.log('[FOTA] Selected release:', version);
-
-      // Find the release in available releases
       const release = this.availableReleases.find(r => r.version === version);
       if (!release) {
         console.error('[FOTA] Release not found:', version);
         return;
       }
 
-      // Update selected version and changelog
       this.selectedVersion = version;
       this.changelog = release.changelog;
-
-      // Update the download URL for this specific version
-      // This will be used when downloading
       this.updateDownloadUrl = release.downloadUrl;
-
-      console.log('[FOTA] Updated to version:', version, 'URL:', release.downloadUrl);
     },
 
     async loadStatus() {
@@ -275,6 +252,7 @@ window.fotaManager = function() {
         this.updateChannel = data.channel || 'stable';
         this.currentVersion = data.current_version;
         this.latestVersion = data.latest_version;
+        this.previousVersion = data.previous_version || '';
         this.selectedVersion = data.latest_version; // Default to latest
         this.updateAvailable = data.update_available;
         this.updateDownloaded = data.update_downloaded;
@@ -409,7 +387,7 @@ window.fotaManager = function() {
       // Show confirmation modal with target version using Alpine Store
       Alpine.store('fotaModal').open(
         'Update Web UI',
-        `This will update to version ${this.latestVersion}. The update will install in the background and the page will refresh automatically when complete.`,
+        `Update from version ${this.currentVersion} to ${this.latestVersion}. The update will install in the background and the page will refresh automatically when complete.`,
         () => this.performApplyUpdate()
       );
     },
@@ -419,7 +397,6 @@ window.fotaManager = function() {
       this.statusMessage = 'Starting update process...';
 
       try {
-        console.log('[FOTA] Starting background update...');
         const response = await fetch('/cgi-bin/fota/apply_update', {
           method: 'POST',
           headers: {
@@ -429,52 +406,30 @@ window.fotaManager = function() {
           body: ''
         });
 
-        console.log('[FOTA] Response status:', response.status);
-        console.log('[FOTA] Response ok:', response.ok);
-
-        // Check if response is ok before parsing JSON
         if (!response.ok) {
-          console.error('[FOTA] HTTP error:', response.status, response.statusText);
           this.statusMessage = `HTTP error ${response.status}: ${response.statusText}`;
           this.isLoading = false;
           return;
         }
 
-        // Get raw text first for debugging
         const responseText = await response.text();
-        console.log('[FOTA] Response text:', responseText);
-
-        // Parse JSON
         let data;
         try {
           data = JSON.parse(responseText);
         } catch (parseError) {
-          console.error('[FOTA] Failed to parse JSON:', parseError);
-          console.error('[FOTA] Response was:', responseText);
           this.statusMessage = 'Invalid server response';
           this.isLoading = false;
           return;
         }
 
-        console.log('[FOTA] Response data:', data);
-
         if (data.ok) {
-          console.log('[FOTA] Update worker launched successfully');
-          console.log('[FOTA] Target version:', data.data?.version);
-
-          // Check if response includes refresh_after instruction
           if (data.refresh_after) {
-            const refreshSeconds = data.refresh_after;
-            console.log('[FOTA] Will refresh after', refreshSeconds, 'seconds');
-
-            // Show countdown modal and refresh
             Alpine.store('fotaModal').showSuccess(
               'Update in Progress',
-              'Update in progress. Page will refresh in ',
-              refreshSeconds
+              `Updating to version ${this.latestVersion}. Page will refresh in `,
+              data.refresh_after
             );
           } else {
-            // Old behavior: start polling
             this.startPolling();
             this.statusMessage = 'Update in progress... This may take a minute.';
           }
@@ -495,10 +450,10 @@ window.fotaManager = function() {
         return;
       }
 
-      // Show confirmation modal with version info using Alpine Store
+      // Show confirmation modal with previous version info
       Alpine.store('fotaModal').open(
         'Rollback Update',
-        `This will rollback to version ${this.currentVersion}. The interface will refresh automatically.`,
+        `Rollback from version ${this.currentVersion} to ${this.previousVersion || 'previous'}. The interface will refresh automatically.`,
         () => this.performRollback()
       );
     },
@@ -509,24 +464,48 @@ window.fotaManager = function() {
 
       try {
         const response = await fetch('/cgi-bin/fota/rollback_update', {
-          method: 'POST'
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': '0'
+          },
+          body: ''
         });
-        const data = await response.json();
+
+        if (!response.ok) {
+          this.statusMessage = `HTTP error ${response.status}: ${response.statusText}`;
+          this.isLoading = false;
+          return;
+        }
+
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseError) {
+          this.statusMessage = 'Invalid server response';
+          this.isLoading = false;
+          return;
+        }
 
         if (data.ok) {
-          // Show success modal with countdown
-          Alpine.store('fotaModal').showSuccess(
-            'Rollback Complete!',
-            `Rolled back to version ${this.currentVersion}. Refreshing in `,
-            5
-          );
+          if (data.refresh_after) {
+            Alpine.store('fotaModal').showSuccess(
+              'Rollback in Progress',
+              `Rolling back to version ${this.previousVersion}. Page will refresh in `,
+              data.refresh_after
+            );
+          } else {
+            this.statusMessage = 'Rollback completed. Please refresh the page.';
+            this.isLoading = false;
+          }
         } else {
-          this.statusMessage = 'Rollback failed: ' + data.message;
+          this.statusMessage = 'Rollback failed: ' + (data.message || 'Unknown error');
           this.isLoading = false;
         }
       } catch (error) {
-        console.error('[FOTA] Rollback failed:', error);
-        this.statusMessage = 'Rollback failed';
+        console.error('[FOTA] Network error:', error);
+        this.statusMessage = 'Rollback failed: ' + error.message;
         this.isLoading = false;
       }
     },

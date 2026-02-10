@@ -196,13 +196,16 @@ update_state() {
     local existing_backup_created="false"
     local backup_path_value=""
     local backup_path_empty=false
+    local previous_version_value=""
 
     if [ -f "$STATE_FILE" ]; then
         existing_backup_created=$(grep -o '"backup_created"[[:space:]]*:[[:space:]]*[a-z]*' "$STATE_FILE" 2>/dev/null | sed 's/.*"backup_created"[[:space:]]*:[[:space:]]*\([a-z]*\).*/\1/')
         local raw_path
         raw_path=$(grep -o '"backup_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" 2>/dev/null | sed 's/.*"backup_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        previous_version_value=$(grep -o '"previous_version"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" 2>/dev/null | sed 's/.*"previous_version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 
         [ -z "$existing_backup_created" ] && existing_backup_created="false"
+        [ -z "$previous_version_value" ] && previous_version_value=""
 
         # Check if path is empty
         if [ -z "$raw_path" ]; then
@@ -227,6 +230,7 @@ update_state() {
   "channel": "$channel",
   "current_version": "$current_version",
   "latest_version": "$latest_version",
+  "previous_version": "$previous_version_value",
   "update_available": $update_available,
   "update_downloaded": false,
   "backup_created": $existing_backup_created,
