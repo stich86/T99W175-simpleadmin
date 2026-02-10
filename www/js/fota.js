@@ -9,32 +9,36 @@ document.addEventListener('alpine:init', () => {
     message: '',
     countdown: 0,
     action: null,
-    
+    hideButtons: false,  // New flag to hide buttons during countdown
+
     open(title, message, action) {
       this.title = title;
       this.message = message;
       this.action = action;
       this.countdown = 0; // Start at 0 for confirmation
+      this.hideButtons = false;
       this.show = true;
     },
-    
+
     close() {
       this.show = false;
       this.action = null;
+      this.hideButtons = false;
     },
-    
+
     confirm() {
       if (this.action) {
         this.action();
       }
       this.close();
     },
-    
-    showSuccess(title, message, countdownSeconds = 5) {
+
+    showSuccess(title, message, countdownSeconds = 5, autoRefresh = true) {
       this.title = title;
       this.countdown = countdownSeconds;
       this.show = true;
       this.action = null;
+      this.hideButtons = true;  // Hide buttons during countdown
 
       // Update message with initial countdown
       this.updateCountdownMessage(message);
@@ -46,8 +50,14 @@ document.addEventListener('alpine:init', () => {
 
         if (this.countdown <= 0) {
           clearInterval(countdownInterval);
-          // Refresh to advanced.html (FOTA page)
-          window.location.href = '/advanced.html#fota';
+          if (autoRefresh) {
+            // Reload the page
+            window.location.reload();
+          } else {
+            // Just close the modal
+            this.show = false;
+            this.hideButtons = false;
+          }
         }
       }, 1000);
     },
@@ -423,7 +433,7 @@ window.fotaManager = function() {
             // Show countdown modal and refresh
             Alpine.store('fotaModal').showSuccess(
               'Update in Progress',
-              `${data.message || 'Update in progress...'} Page will refresh in `,
+              'Update in progress. Page will refresh in ',
               refreshSeconds
             );
           } else {

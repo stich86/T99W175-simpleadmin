@@ -1,62 +1,55 @@
 #!/bin/bash
 
-# SimpleAdmin Update System - Apply Update
-# Updates state to 'updating', launches worker, returns immediately
-# Worker completes update and updates state to 'success'/'error'
+# SimpleAdmin FOTA - Apply Update
+# Updates state to 'updating', launches worker, IMMEDIATELY returns response
+# Worker waits before executing to ensure response is sent
 
 SCRIPT_DIR="/WEBSERVER/www/cgi-bin"
 STATE_DIR="/data/simpleadmin"
 STATE_FILE="${STATE_DIR}/update-state.json"
 WWW_DIR="/WEBSERVER/www"
 
-# Log start
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] apply_update: Started" >> /tmp/simpleadmin-fota.log 2>/dev/null || true
+# Logging
+exec 2>/tmp/simpleadmin-fota-stderr.log
+echo "[$(date)] apply_update START" >> /tmp/simpleadmin-fota-exec.log
 
-# Source session utilities (disable set -e)
-set +e
-. "$SCRIPT_DIR/session_utils.sh"
+# Response function
+send_response() {
+    local ok=$1
+    local msg=$2
+    local refresh=$3
+    local ver=$4
+
+    cat <<EOF
+Status: 200 OK
+Content-type: application/json
+Cache-Control: no-store
+
+{"ok": $ok, "message": "$msg", "refresh_after": $refresh, "data": {"version": "$ver"}}
+EOF
+}
+
+# Source session utils
+set +e +u
+. "$SCRIPT_DIR/session_utils.sh" 2>/dev/null || true
 set -e 2>/dev/null || true
 
 # Validate session
-if ! session_load; then
-    echo "Status: 401 Unauthorized"
-    echo "Content-type: application/json"
-    echo ""
-    echo '{"ok": false, "message": "Invalid or expired session"}'
-    exit 1
-fi
+session_load 2>/dev/null || { send_response "false" "Invalid session" "0" ""; exit 1; }
+session_require_role "admin" 2>/dev/null || { send_response "false" "Admin required" "0" ""; exit 1; }
 
-if ! session_require_role "admin"; then
-    echo "Status: 403 Forbidden"
-    echo "Content-type: application/json"
-    echo ""
-    echo '{"ok": false, "message": "Admin privileges required"}'
-    exit 1
-fi
-
-# Extract field from JSON
+# JSON helpers
 extract_json_field() {
-    local json=$1
-    local field=$2
-    echo "$json" | grep "\"$field\":" | sed 's/.*"'$field'" *: *"\([^"]*\)".*/\1/' | head -n 1
+    echo "$1" | grep "\"$2\":" | sed 's/.*"'$2'" *: *"\([^"]*\)".*/\1/' | head -n 1
 }
 
 extract_json_bool() {
-    local json=$1
-    local field=$2
-    echo "$json" | grep "\"$field\":" | sed 's/.*"'$field'" *: *\([^,}]*\).*/\1/' | head -n 1
+    echo "$1" | grep "\"$2\":" | sed 's/.*"'$2'" *: *\([^,}]*\).*/\1/' | head -n 1
 }
 
 # Read state
+[ -f "$STATE_FILE" ] || { send_response "false" "State file not found" "0" ""; exit 1; }
 state_data=$(cat "$STATE_FILE" 2>/dev/null)
-
-if [ -z "$state_data" ]; then
-    echo "Status: 200 OK"
-    echo "Content-type: application/json"
-    echo ""
-    echo '{"ok": false, "message": "State file not found"}'
-    exit 1
-fi
 
 # Extract fields
 update_downloaded=$(extract_json_bool "$state_data" "update_downloaded")
@@ -65,90 +58,33 @@ latest_version=$(extract_json_field "$state_data" "latest_version")
 current_version=$(extract_json_field "$state_data" "current_version")
 
 # Validate
-if [ "$update_downloaded" != "true" ]; then
-    echo "Status: 200 OK"
-    echo "Content-type: application/json"
-    echo ""
-    echo '{"ok": false, "message": "Update not downloaded"}'
-    exit 1
-fi
+[ "$update_downloaded" = "true" ] || { send_response "false" "Update not downloaded" "0" ""; exit 1; }
+[ -n "$download_path" ] && [ -f "$download_path" ] || { send_response "false" "Download file not found" "0" ""; exit 1; }
+[ -f "$SCRIPT_DIR/fota/apply_update_worker.sh" ] || { send_response "false" "Worker script not found" "0" ""; exit 1; }
 
-if [ -z "$download_path" ] || [ ! -f "$download_path" ]; then
-    echo "Status: 200 OK"
-    echo "Content-type: application/json"
-    echo ""
-    echo '{"ok": false, "message": "Download file not found"}'
-    exit 1
-fi
+[ -z "$latest_version" ] || [ "$latest_version" = "null" ] && latest_version="$current_version"
 
-if [ ! -f "$SCRIPT_DIR/fota/apply_update_worker.sh" ]; then
-    echo "Status: 200 OK"
-    echo "Content-type: application/json"
-    echo ""
-    echo '{"ok": false, "message": "Worker script not found"}'
-    exit 1
-fi
-
-# Validate version
-if [ -z "$latest_version" ] || [ "$latest_version" = "null" ]; then
-    latest_version="$current_version"
-fi
-
-# Copy worker to /tmp (outside www so it survives rename)
+# Copy worker to /tmp
 WORKER_SOURCE="$SCRIPT_DIR/fota/apply_update_worker.sh"
 WORKER_TARGET="/tmp/apply_update_worker_$$.sh"
 
-if ! cp "$WORKER_SOURCE" "$WORKER_TARGET" 2>/dev/null; then
-    echo "Status: 200 OK"
-    echo "Content-type: application/json"
-    echo ""
-    echo '{"ok": false, "message": "Failed to copy worker script"}'
-    exit 1
-fi
-
-chmod +x "$WORKER_TARGET"
+cp "$WORKER_SOURCE" "$WORKER_TARGET" 2>/dev/null || { send_response "false" "Failed to copy worker" "0" ""; exit 1; }
+chmod +x "$WORKER_TARGET" 2>/dev/null
 
 # Check systemd-run
-if ! which systemd-run >/dev/null 2>&1; then
-    rm -f "$WORKER_TARGET"
-    echo "Status: 200 OK"
-    echo "Content-type: application/json"
-    echo ""
-    echo '{"ok": false, "message": "systemd-run not available"}'
-    exit 1
-fi
+which systemd-run >/dev/null 2>&1 || { send_response "false" "systemd-run not available" "0" ""; exit 1; }
 
-# Update state to 'updating' BEFORE launching worker
-# This is the critical moment - state must be updated before response
-sed -i 's/"status": "[^"]*"/"status": "updating"/' "$STATE_FILE" 2>/dev/null
+# Update state to 'updating'
+sed -i 's/"status": "[^"]*"/"status": "updating"/' "$STATE_FILE" 2>/dev/null || true
 
-# Launch worker via systemd-run
-systemd-run --quiet --scope \
-    "$WORKER_TARGET" "$download_path" "$current_version" >/dev/null 2>&1
+# Launch worker in background (detached)
+systemd-run --quiet --scope "$WORKER_TARGET" "$download_path" "$current_version" >/dev/null 2>&1 &
 
-if [ $? -ne 0 ]; then
-    rm -f "$WORKER_TARGET"
-    sed -i 's/"status": "[^"]*"/"status": "error"/' "$STATE_FILE" 2>/dev/null
-    echo "Status: 200 OK"
-    echo "Content-type: application/json"
-    echo ""
-    echo '{"ok": false, "message": "Failed to start worker"}'
-    exit 1
-fi
+# CRITICAL: Send response IMMEDIATELY after launching worker
+# The worker will wait 2 seconds before starting, giving us time to respond
+send_response "true" "Update started in background. Page will refresh." "30" "$latest_version"
 
-# Return success with refresh instruction
-cat <<EOF
-Status: 200 OK
-Content-type: application/json
-Cache-Control: no-store
+echo "[$(date)] Response sent, worker launched" >> /tmp/simpleadmin-fota-exec.log
 
-{
-  "ok": true,
-  "refresh_after": 30,
-  "message": "Update started in background. Page will refresh automatically.",
-  "data": {
-    "version": "$latest_version",
-    "current_version": "$current_version"
-  }
-}
-EOF
+# Exit immediately after sending response
+exit 0
