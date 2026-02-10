@@ -192,7 +192,19 @@ update_state() {
     # Escape changelog for JSON
     changelog=$(echo "$changelog" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
 
-    # Create state file manually
+    # Preserve existing backup info if state file exists
+    local existing_backup_created="false"
+    local existing_backup_path="\"\""
+
+    if [ -f "$STATE_FILE" ]; then
+        existing_backup_created=$(grep -o '"backup_created"[[:space:]]*:[[:space:]]*[a-z]*' "$STATE_FILE" | sed 's/.*"backup_created"[[:space:]]*:[[:space:]]*\([a-z]*\).*/\1/')
+        existing_backup_path=$(grep -o '"backup_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" | sed 's/.*"backup_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+        [ -z "$existing_backup_created" ] && existing_backup_created="false"
+        [ -z "$existing_backup_path" ] && existing_backup_path="\"\""
+    fi
+
+    # Create state file manually, preserving backup info
     cat > "$STATE_FILE" <<EOF
 {
   "channel": "$channel",
@@ -200,8 +212,8 @@ update_state() {
   "latest_version": "$latest_version",
   "update_available": $update_available,
   "update_downloaded": false,
-  "backup_created": false,
-  "backup_path": "",
+  "backup_created": $existing_backup_created,
+  "backup_path": "$existing_backup_path",
   "download_path": "",
   "status": "idle",
   "last_check": "$timestamp",

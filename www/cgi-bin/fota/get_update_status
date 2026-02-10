@@ -75,6 +75,8 @@ main() {
     # Reset status to idle if requested
     if [ "$RESET_STATUS" = "true" ]; then
         sleep 0.1  # Small delay to ensure response is sent
+        # Only reset status, error_message, and downloaded flag
+        # KEEP: backup_created, backup_path, current_version, latest_version
         sed -i 's/"status": "[^"]*"/"status": "idle"/' "$STATE_FILE" 2>/dev/null
         sed -i 's/"error_message": "[^"]*"/"error_message": ""/' "$STATE_FILE" 2>/dev/null
         sed -i 's/"update_downloaded": [^,}]*/"update_downloaded": false/' "$STATE_FILE" 2>/dev/null

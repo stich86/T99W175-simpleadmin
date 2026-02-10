@@ -106,20 +106,38 @@ window.fotaManager = function() {
       console.log('[FOTA] Initializing...');
 
       // Check for completed update on page load
-      this.checkUpdateStatusOnLoad();
+      this.checkUpdateStatusOnLoad().then(() => {
+        // Only check for updates if status is idle (not after update)
+        this.getStatus().then(data => {
+          if (data.status === 'idle') {
+            this.checkUpdates();
+          } else {
+            // Just load the status without checking GitHub
+            this.loadStatus();
+          }
+        });
 
-      // Load status and check for updates on page load
-      this.checkUpdates();
-
-      // Check if update is in progress and start polling
-      this.$nextTick(() => {
-        this.checkUpdateInProgress();
+        // Check if update is in progress and start polling
+        this.$nextTick(() => {
+          this.checkUpdateInProgress();
+        });
       });
+    },
+
+    async getStatus() {
+      try {
+        const response = await fetch('/cgi-bin/fota/get_update_status');
+        return await response.json();
+      } catch (error) {
+        console.error('[FOTA] Failed to get status:', error);
+        return { status: 'idle' };
+      }
     },
 
     async checkUpdateStatusOnLoad() {
       try {
-        const response = await fetch('/cgi-bin/fota/get_update_status?reset=true');
+        // First call: get status WITHOUT reset
+        const response = await fetch('/cgi-bin/fota/get_update_status');
         const data = await response.json();
 
         if (data.ok) {
@@ -130,16 +148,18 @@ window.fotaManager = function() {
               `Updated to version ${data.latest_version}.`
             );
 
-            // Reset status after showing
+            // AFTER showing, reset the status
             setTimeout(() => {
+              fetch('/cgi-bin/fota/get_update_status?reset=true');
               this.loadStatus();
-            }, 5000);
+            }, 4000);
 
           } else if (data.status === 'error') {
             // Show error notification
             this.statusMessage = 'Update failed: ' + (data.error_message || 'Unknown error');
             setTimeout(() => {
               if (confirm('Update failed: ' + (data.error_message || 'Unknown error') + '\n\nClick OK to reset.')) {
+                fetch('/cgi-bin/fota/get_update_status?reset=true');
                 this.loadStatus();
               }
             }, 500);
