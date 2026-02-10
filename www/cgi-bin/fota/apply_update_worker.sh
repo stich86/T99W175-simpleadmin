@@ -213,8 +213,13 @@ log_info "Cleanup..."
 rm -rf "${STAGING_DIR}" 2>/dev/null &
 rm -f "$DOWNLOAD_PATH" 2>/dev/null && log_info "Downloaded file removed"
 
-# Update state to success
+# Update state to success and update version info
 update_state "success" ""
+# Update current_version to new version
+sed -i "s|\"current_version\": \"[^\"]*\"|\"current_version\": \"$latest_version\"|" "$STATE_FILE" 2>/dev/null
+# Clear download path
+sed -i 's|"download_path": "[^"]*"|"download_path": ""|' "$STATE_FILE" 2>/dev/null
+sed -i 's/"update_downloaded": [^,}]*/"update_downloaded": false/' "$STATE_FILE" 2>/dev/null
 
 log_info "=== Update Complete ==="
 log_info "Previous: $CURRENT_VERSION, New: $latest_version"
