@@ -220,6 +220,8 @@ sed -i "s|\"current_version\": \"[^\"]*\"|\"current_version\": \"$latest_version
 # Clear download path
 sed -i 's|"download_path": "[^"]*"|"download_path": ""|' "$STATE_FILE" 2>/dev/null
 sed -i 's/"update_downloaded": [^,}]*/"update_downloaded": false/' "$STATE_FILE" 2>/dev/null
+# Reset update_available since current_version now equals latest_version
+sed -i 's/"update_available": [^,}]*/"update_available": false/' "$STATE_FILE" 2>/dev/null
 
 log_info "=== Update Complete ==="
 log_info "Previous: $CURRENT_VERSION, New: $latest_version"

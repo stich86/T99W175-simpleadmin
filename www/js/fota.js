@@ -62,7 +62,7 @@ document.addEventListener('alpine:init', () => {
       }, 1000);
     },
 
-    showMessage(title, message, autoHide = true) {
+    showMessage(title, message, autoHide = true, onClose = null) {
       this.title = title;
       this.message = message;
       this.countdown = 0;  // No countdown
@@ -75,6 +75,10 @@ document.addEventListener('alpine:init', () => {
         setTimeout(() => {
           this.show = false;
           this.hideButtons = false;
+          // Call onClose callback if provided
+          if (onClose && typeof onClose === 'function') {
+            onClose();
+          }
         }, 4000);
       }
     },
@@ -140,37 +144,37 @@ window.fotaManager = function() {
         const response = await fetch('/cgi-bin/fota/get_update_status');
         const data = await response.json();
 
-        if (data.ok) {
-          if (data.status === 'success') {
-            console.log('[FOTA] Update successful, showing banner');
-            // Show success notification (no countdown, just message)
-            Alpine.store('fotaModal').showMessage(
-              '✓ Update Complete!',
-              `Updated to version ${data.latest_version}.`
-            );
+        // Check if status exists and is success
+        if (data.status === 'success') {
+          console.log('[FOTA] Update successful, showing banner');
+          // Show success notification (no countdown, just message)
+          // Pass a callback that will be executed after the banner closes
+          Alpine.store('fotaModal').showMessage(
+            '✓ Update Complete!',
+            `Updated to version ${data.latest_version}.`,
+            true,  // autoHide
+            async () => {
+              // After banner closes (4 sec), reset status and reload UI
+              console.log('[FOTA] Banner closed, resetting status and reloading UI');
+              await fetch('/cgi-bin/fota/get_update_status?reset=true');
+              this.loadStatus();
+            }
+          );
 
-            // AFTER showing (4 sec), reset the status
-            setTimeout(() => {
+        } else if (data.status === 'error') {
+          // Show error notification
+          this.statusMessage = 'Update failed: ' + (data.error_message || 'Unknown error');
+          setTimeout(() => {
+            if (confirm('Update failed: ' + (data.error_message || 'Unknown error') + '\n\nClick OK to reset.')) {
               fetch('/cgi-bin/fota/get_update_status?reset=true');
-              // NOTE: Don't call loadStatus() here - it would overwrite the success message
-              // The state file now has status="idle", so next manual check will work correctly
-            }, 4000);
+              this.loadStatus();
+            }
+          }, 500);
 
-          } else if (data.status === 'error') {
-            // Show error notification
-            this.statusMessage = 'Update failed: ' + (data.error_message || 'Unknown error');
-            setTimeout(() => {
-              if (confirm('Update failed: ' + (data.error_message || 'Unknown error') + '\n\nClick OK to reset.')) {
-                fetch('/cgi-bin/fota/get_update_status?reset=true');
-                this.loadStatus();
-              }
-            }, 500);
-
-          } else if (data.status === 'updating') {
-            // Update in progress - could be stale if older than 5 min
-            // But let polling handle it
-            console.log('[FOTA] Update in progress');
-          }
+        } else if (data.status === 'updating') {
+          // Update in progress - could be stale if older than 5 min
+          // But let polling handle it
+          console.log('[FOTA] Update in progress');
         }
       } catch (error) {
         console.error('[FOTA] Failed to check update status on load:', error);
@@ -266,11 +270,6 @@ window.fotaManager = function() {
       try {
         const response = await fetch('/cgi-bin/fota/get_update_status');
         const data = await response.json();
-
-        if (data.ok === false) {
-          console.error('[FOTA] Error loading status:', data.message);
-          return;
-        }
 
         // Update state
         this.updateChannel = data.channel || 'stable';
