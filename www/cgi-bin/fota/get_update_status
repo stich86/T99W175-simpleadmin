@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # SimpleAdmin Update System - Get Update Status
-# Returns current update state
+# Returns current update state, optionally resets status to idle
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -28,6 +28,21 @@ fi
 STATE_DIR="/data/simpleadmin"
 STATE_FILE="${STATE_DIR}/update-state.json"
 
+# Parse query parameters
+QUERY_STRING="${QUERY_STRING:-}"
+RESET_STATUS=""
+
+# Parse query string
+if [ -n "$QUERY_STRING" ]; then
+    for param in $(echo "$QUERY_STRING" | tr '&' ' '); do
+        key=$(echo "$param" | cut -d'=' -f1)
+        value=$(echo "$param" | cut -d'=' -f2)
+        case "$key" in
+            reset) RESET_STATUS="$value" ;;
+        esac
+    done
+fi
+
 # Main execution
 main() {
     # Check if state file exists
@@ -51,8 +66,19 @@ main() {
         exit 0
     fi
 
-    # Read and output state with proper headers
-    send_json_response 200 "$(cat "$STATE_FILE")"
+    # Read state
+    state_data=$(cat "$STATE_FILE" 2>/dev/null)
+
+    # Output state
+    send_json_response 200 "$state_data"
+
+    # Reset status to idle if requested
+    if [ "$RESET_STATUS" = "true" ]; then
+        sleep 0.1  # Small delay to ensure response is sent
+        sed -i 's/"status": "[^"]*"/"status": "idle"/' "$STATE_FILE" 2>/dev/null
+        sed -i 's/"error_message": "[^"]*"/"error_message": ""/' "$STATE_FILE" 2>/dev/null
+        sed -i 's/"update_downloaded": [^,}]*/"update_downloaded": false/' "$STATE_FILE" 2>/dev/null
+    fi
 }
 
 # Execute main function

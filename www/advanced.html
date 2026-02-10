@@ -453,7 +453,7 @@
                 This will update to version X.X.X. The interface will refresh automatically.
               </p>
             </div>
-            <div class="d-grid gap-2 d-md-block" x-show="$store.fotaModal.countdown === 0">
+            <div class="d-grid gap-2 d-md-block" x-show="$store.fotaModal.countdown === 0 || !$store.fotaModal.hideButtons">
               <button class="btn btn-primary" type="button" @click="$store.fotaModal.confirm()">
                 Continue
               </button>

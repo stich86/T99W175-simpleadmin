@@ -62,6 +62,23 @@ document.addEventListener('alpine:init', () => {
       }, 1000);
     },
 
+    showMessage(title, message, autoHide = true) {
+      this.title = title;
+      this.message = message;
+      this.countdown = 0;  // No countdown
+      this.action = null;
+      this.hideButtons = true;  // Hide buttons
+      this.show = true;
+
+      if (autoHide) {
+        // Auto-hide after 4 seconds
+        setTimeout(() => {
+          this.show = false;
+          this.hideButtons = false;
+        }, 4000);
+      }
+    },
+
     updateCountdownMessage(baseMessage) {
       this.message = baseMessage + this.countdown + ' seconds...';
     }
@@ -102,22 +119,21 @@ window.fotaManager = function() {
 
     async checkUpdateStatusOnLoad() {
       try {
-        const response = await fetch('/cgi-bin/fota/get_update_status');
+        const response = await fetch('/cgi-bin/fota/get_update_status?reset=true');
         const data = await response.json();
 
         if (data.ok) {
           if (data.status === 'success') {
-            // Show success notification
-            Alpine.store('fotaModal').showSuccess(
-              'Update Complete!',
-              `Updated to version ${data.latest_version}. Refreshing in `,
-              5
+            // Show success notification (no countdown, just message)
+            Alpine.store('fotaModal').showMessage(
+              '✓ Update Complete!',
+              `Updated to version ${data.latest_version}.`
             );
 
             // Reset status after showing
             setTimeout(() => {
               this.loadStatus();
-            }, 6000);
+            }, 5000);
 
           } else if (data.status === 'error') {
             // Show error notification
