@@ -337,6 +337,7 @@ main() {
             update_available="true"
             log_info "Update available!"
         else
+            update_available="false"
             log_info "Already up to date"
         fi
     fi

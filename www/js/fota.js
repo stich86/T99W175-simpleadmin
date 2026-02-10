@@ -142,16 +142,18 @@ window.fotaManager = function() {
 
         if (data.ok) {
           if (data.status === 'success') {
+            console.log('[FOTA] Update successful, showing banner');
             // Show success notification (no countdown, just message)
             Alpine.store('fotaModal').showMessage(
               '✓ Update Complete!',
               `Updated to version ${data.latest_version}.`
             );
 
-            // AFTER showing, reset the status
+            // AFTER showing (4 sec), reset the status
             setTimeout(() => {
               fetch('/cgi-bin/fota/get_update_status?reset=true');
-              this.loadStatus();
+              // NOTE: Don't call loadStatus() here - it would overwrite the success message
+              // The state file now has status="idle", so next manual check will work correctly
             }, 4000);
 
           } else if (data.status === 'error') {
